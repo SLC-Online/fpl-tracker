@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+	/* FPL Tracker colour palette */
+	--color-bg-primary: #0f172a;      /* Slate 900 */
+	--color-bg-secondary: #1e293b;    /* Slate 800 */
+	--color-bg-card: #1e293b;
+	--color-bg-hover: #334155;        /* Slate 700 */
+	--color-border: #334155;
+	--color-text-primary: #f1f5f9;    /* Slate 100 */
+	--color-text-secondary: #94a3b8;  /* Slate 400 */
+	--color-text-muted: #64748b;      /* Slate 500 */
+	--color-accent: #38bdf8;          /* Sky 400 */
+	--color-accent-hover: #7dd3fc;    /* Sky 300 */
+	--color-success: #4ade80;         /* Green 400 */
+	--color-danger: #f87171;          /* Red 400 */
+	--color-warning: #fbbf24;         /* Amber 400 */
+}
+
+/* Base styles */
+body {
+	background-color: var(--color-bg-primary);
+	color: var(--color-text-primary);
+	font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
