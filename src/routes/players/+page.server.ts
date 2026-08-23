@@ -64,13 +64,11 @@ export const load: PageServerLoad = async () => {
 
 	// If GW1 is current (kicked off), expected points should start from GW2
 	// csvGwOffset = number of GWs to skip from the CSV data
-	// e.g. CSV was uploaded before GW1, so gw1 = GW1 projections
-	// If GW1 has kicked off, skip gw1 column, start from gw2
+	// Use next_gw - csv_gameweek: if CSV is for GW1 and next GW is 2, skip 1 column
 	let csvGwOffset = 0;
-	if (currentEvent && csvData && csvData.length > 0) {
+	if (nextEvent && csvData && csvData.length > 0) {
 		const csvGameweek = csvData[0]?.gameweek || 1;
-		// If current GW > the GW the CSV was uploaded for, offset by the difference
-		csvGwOffset = Math.max(0, currentEvent.event_id - csvGameweek);
+		csvGwOffset = Math.max(0, nextEvent.event_id - csvGameweek);
 	}
 
 	return {
