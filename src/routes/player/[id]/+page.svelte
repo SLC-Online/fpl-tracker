@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { playerPhotoUrl, teamBadgeUrl, POSITIONS, POSITION_COLORS } from '$lib/types';
+	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
 	let chartContainer: HTMLElement;
@@ -74,7 +75,8 @@
 <div class="space-y-8">
 	<!-- Player Header -->
 	<div class="flex items-start gap-6">
-		<img src={playerPhotoUrl(data.player.code, '250x250')} alt={data.player.web_name}
+		<PlayerPhoto code={data.player.code} teamCode={data.player.teams.code} size="250x250"
+			isGk={data.player.element_type === 1}
 			class="w-32 h-32 rounded-xl bg-[var(--color-bg-card)] object-cover" />
 		<div class="flex-1">
 			<div class="flex items-center gap-3">

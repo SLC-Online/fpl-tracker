@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { playerPhotoUrl, teamBadgeUrl, POSITIONS } from '$lib/types';
+	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
 
@@ -47,7 +48,7 @@
 						<tr class="border-b border-[var(--color-border)] hover:bg-[var(--color-bg-hover)] transition-colors">
 							<td class="p-4">
 								<a href="/player/{pc.element_id}" class="flex items-center gap-3 hover:text-[var(--color-accent)]">
-									<img src={playerPhotoUrl(player.code, '40x40')} alt=""
+									<PlayerPhoto code={player.code} teamCode={player.teams.code} size="40x40"
 										class="w-8 h-8 rounded-full bg-[var(--color-bg-hover)]" />
 									<span class="font-medium">{player.web_name}</span>
 								</a>

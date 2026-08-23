@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { playerPhotoUrl, teamBadgeUrl, POSITIONS } from '$lib/types';
+	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
 
@@ -47,7 +48,7 @@
 				{#each data.priceChanges as pc}
 					<a href="/player/{pc.element_id}"
 						class="flex items-center gap-4 p-3 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors">
-						<img src={playerPhotoUrl(pc.players.code, '40x40')} alt=""
+						<PlayerPhoto code={pc.players.code} teamCode={pc.players.teams.code} size="40x40"
 							class="w-10 h-10 rounded-full bg-[var(--color-bg-hover)]" />
 						<div class="flex-1">
 							<span class="font-medium">{pc.players.web_name}</span>
@@ -73,7 +74,7 @@
 				{#each data.risers as player}
 					<a href="/player/{player.element_id}"
 						class="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] hover:border-[var(--color-success)]/50 transition-colors">
-						<img src={playerPhotoUrl(player.players.code, '40x40')} alt=""
+						<PlayerPhoto code={player.players.code} teamCode={player.players.teams.code} size="40x40"
 							class="w-8 h-8 rounded-full bg-[var(--color-bg-hover)]" />
 						<img src={teamBadgeUrl(player.players.teams.code)} alt=""
 							class="w-5 h-5" />
@@ -97,7 +98,7 @@
 				{#each data.fallers as player}
 					<a href="/player/{player.element_id}"
 						class="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] hover:border-[var(--color-danger)]/50 transition-colors">
-						<img src={playerPhotoUrl(player.players.code, '40x40')} alt=""
+						<PlayerPhoto code={player.players.code} teamCode={player.players.teams.code} size="40x40"
 							class="w-8 h-8 rounded-full bg-[var(--color-bg-hover)]" />
 						<img src={teamBadgeUrl(player.players.teams.code)} alt=""
 							class="w-5 h-5" />

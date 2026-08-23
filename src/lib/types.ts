@@ -103,6 +103,12 @@ export function playerPhotoUrl(code: number, size: '40x40' | '110x140' | '250x25
 	return `https://resources.premierleague.com/premierleague/photos/players/${size}/p${code}.png`;
 }
 
+export function playerPhotoFallback(teamCode: number, isGk = false): string {
+	// When player photo returns 403, show their team shirt
+	const suffix = isGk ? '_1' : '';
+	return `https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${teamCode}${suffix}-110.webp`;
+}
+
 export function teamBadgeUrl(teamCode: number): string {
 	return `https://resources.premierleague.com/premierleague/badges/rb/t${teamCode}.svg`;
 }
