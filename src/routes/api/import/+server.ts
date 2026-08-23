@@ -17,7 +17,14 @@ function stripAccents(s: string): string {
 }
 
 function cleanName(name: string): string {
-	return stripAccents(name.replace(/\s*\(.*?\)\s*/g, ' ').replace(/�/g, '').replace(/\uFFFD/g, '')).toLowerCase().trim();
+	return stripAccents(
+		name
+			.replace(/\s*\(.*?\)\s*/g, ' ')
+			.replace(/�/g, '')
+			.replace(/\uFFFD/g, '')
+			.replace(/[''`´]/g, "'")  // normalize apostrophes
+			.replace(/[""]/g, '"')    // normalize quotes
+	).toLowerCase().trim();
 }
 
 function nameSimilarity(csvName: string, apiName: string): number {
@@ -196,10 +203,14 @@ export const POST: RequestHandler = async ({ request }) => {
 					lowConfidence.push({ csvName: name, team, apiName: match.web_name, score: score.toFixed(2) });
 				}
 			} else {
+				// Check if there are ANY players on this team — if not, player might not be in FPL
+				const teamPlayers = apiPlayers.filter(p => p.team_short === teamApi);
+				const notInFpl = !match || (teamPlayers.length > 0 && score < 0.3);
 				unmatched.push({
 					name, team,
 					bestGuess: match?.web_name || '???',
-					score: (score || 0).toFixed(2)
+					score: (score || 0).toFixed(2),
+					reason: notInFpl ? 'Not in FPL database' : 'Low match confidence'
 				});
 				continue;
 			}
