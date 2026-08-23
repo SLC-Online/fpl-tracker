@@ -17,7 +17,7 @@ function stripAccents(s: string): string {
 }
 
 function cleanName(name: string): string {
-	return stripAccents(name.replace(/\s*\(.*?\)\s*/g, ' ').replace(/�/g, '')).toLowerCase().trim();
+	return stripAccents(name.replace(/\s*\(.*?\)\s*/g, ' ').replace(/�/g, '').replace(/\uFFFD/g, '')).toLowerCase().trim();
 }
 
 function nameSimilarity(csvName: string, apiName: string): number {
@@ -93,8 +93,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		throw error(400, 'Missing required fields: csv, season, gameweek');
 	}
 
-	// Read CSV content
-	const csvText = await csvFile.text();
+	// Read CSV content — file is latin-1 encoded, decode properly
+	const rawBytes = await csvFile.arrayBuffer();
+	const csvText = new TextDecoder('latin1').decode(rawBytes);
 	const lines = csvText.split('\n');
 	const header = lines[0];
 
@@ -123,6 +124,17 @@ export const POST: RequestHandler = async ({ request }) => {
 	const mappingLookup = new Map<string, number>();
 	for (const m of existingMappings || []) {
 		mappingLookup.set(`${m.csv_name}||${m.csv_team}`, m.element_id);
+	}
+
+	// Also get ALL mappings (any season) for fallback cross-referencing
+	const { data: allMappings } = await supabaseAdmin
+		.from('csv_name_mapping')
+		.select('csv_name, csv_team, element_id')
+		.not('element_id', 'is', null);
+
+	const allMappingLookup = new Map<string, number>();
+	for (const m of allMappings || []) {
+		allMappingLookup.set(`${m.csv_name}||${m.csv_team}`, m.element_id);
 	}
 
 	// Parse and match
@@ -163,6 +175,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Try existing mapping
 		const key = `${name}||${team}`;
 		let elementId = mappingLookup.get(key);
+
+		// Fallback: check all-season mappings (handles name staying same across GWs)
+		if (!elementId) {
+			elementId = allMappingLookup.get(key) || undefined;
+		}
 
 		if (!elementId) {
 			// Fuzzy match
