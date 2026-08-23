@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { playerPhotoUrl, teamBadgeUrl, POSITIONS, POSITION_COLORS } from '$lib/types';
+	import { teamBadgeUrl, POSITIONS } from '$lib/types';
 	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
@@ -17,18 +17,18 @@
 
 		const timestamps = data.timeline.map((s: any) => new Date(s.snapshots.timestamp).getTime());
 		const prices = data.timeline.map((s: any) => s.now_cost / 10);
-		const transfersIn = data.timeline.map((s: any) => s.transfers_in_event);
 		const ownership = data.timeline.map((s: any) => parseFloat(s.selected_by_percent || 0));
 		const pricePct = data.timeline.map((s: any) => parseFloat(s.price_change_percent || 0));
 
 		const options = {
 			chart: {
 				type: 'line',
-				height: 400,
+				height: 360,
 				background: 'transparent',
-				foreColor: '#94a3b8',
-				toolbar: { show: true },
+				foreColor: '#64748b',
+				toolbar: { show: true, tools: { download: false } },
 				zoom: { enabled: true },
+				fontFamily: 'Sohne, system-ui, sans-serif',
 			},
 			theme: { mode: 'dark' as const },
 			series: [
@@ -39,23 +39,28 @@
 			xaxis: {
 				type: 'datetime' as const,
 				categories: timestamps,
+				labels: { style: { fontFamily: 'Sohne Mono' } },
 			},
 			yaxis: [
-				{ title: { text: 'Price (£)' }, decimalsInFloat: 1 },
-				{ title: { text: 'Price Change %' }, opposite: true, decimalsInFloat: 1 },
-				{ title: { text: 'Ownership %' }, opposite: true, show: false },
+				{ title: { text: 'Price (£)', style: { fontFamily: 'Sohne' } }, decimalsInFloat: 1 },
+				{ title: { text: 'Price Change %', style: { fontFamily: 'Sohne' } }, opposite: true, decimalsInFloat: 1 },
+				{ show: false },
 			],
-			stroke: { width: [3, 2, 1], curve: 'smooth' as const },
-			colors: ['#38bdf8', '#4ade80', '#fbbf24'],
-			grid: { borderColor: '#334155' },
-			tooltip: { theme: 'dark' },
+			stroke: { width: [3, 2, 1.5], curve: 'smooth' as const },
+			colors: ['#6366f1', '#10b981', '#f59e0b'],
+			grid: { borderColor: '#1a2440', strokeDashArray: 4 },
+			tooltip: {
+				theme: 'dark',
+				style: { fontFamily: 'Sohne' },
+			},
+			legend: { fontFamily: 'Sohne', fontSize: '12px' },
 			annotations: {
 				xaxis: data.priceChanges.map((pc: any) => ({
 					x: new Date(pc.detected_at).getTime(),
-					borderColor: pc.change > 0 ? '#4ade80' : '#f87171',
+					borderColor: pc.change > 0 ? '#10b981' : '#ef4444',
 					label: {
 						text: `${pc.change > 0 ? '↑' : '↓'} ${formatPrice(pc.new_cost)}`,
-						style: { color: '#fff', background: pc.change > 0 ? '#4ade80' : '#f87171' }
+						style: { color: '#fff', background: pc.change > 0 ? '#10b981' : '#ef4444', fontFamily: 'Sohne Mono', fontSize: '11px' }
 					}
 				}))
 			}
@@ -74,44 +79,44 @@
 
 <div class="space-y-8">
 	<!-- Player Header -->
-	<div class="flex items-start gap-6">
+	<div class="flex items-start gap-6 sm:gap-8">
 		<PlayerPhoto code={data.player.code} teamCode={data.player.teams.code} size="250x250"
 			isGk={data.player.element_type === 1}
-			class="w-32 h-32 rounded-xl bg-[var(--color-bg-card)] object-cover" />
-		<div class="flex-1">
+			class="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-[var(--color-surface-2)] object-cover card-glow" />
+		<div class="flex-1 pt-1">
 			<div class="flex items-center gap-3">
-				<img src={teamBadgeUrl(data.player.teams.code)} alt="" class="w-8 h-8" />
-				<h1 class="text-3xl font-bold">{data.player.web_name}</h1>
+				<img src={teamBadgeUrl(data.player.teams.code)} alt="" class="w-7 h-7" />
+				<h1 class="font-display font-bold text-2xl sm:text-3xl tracking-tight">{data.player.web_name}</h1>
 			</div>
-			<p class="text-[var(--color-text-secondary)] mt-1">
+			<p class="text-[var(--color-text-2)] text-sm mt-1">
 				{data.player.first_name} {data.player.second_name} · {data.player.teams.name} · {POSITIONS[data.player.element_type]}
 			</p>
 
 			{#if data.timeline.length > 0}
 				{@const latest = data.timeline[data.timeline.length - 1]}
-				<div class="flex gap-6 mt-4">
+				<div class="flex flex-wrap gap-6 mt-5">
 					<div>
-						<div class="text-2xl font-bold">{formatPrice(latest.now_cost)}</div>
-						<div class="text-[var(--color-text-muted)] text-xs">Price</div>
+						<div class="font-mono text-2xl font-semibold">{formatPrice(latest.now_cost)}</div>
+						<div class="text-[var(--color-text-2)] text-xs mt-0.5">Price</div>
 					</div>
 					<div>
-						<div class="text-2xl font-bold">{latest.selected_by_percent}%</div>
-						<div class="text-[var(--color-text-muted)] text-xs">Ownership</div>
+						<div class="font-mono text-2xl font-semibold">{latest.selected_by_percent}%</div>
+						<div class="text-[var(--color-text-2)] text-xs mt-0.5">Ownership</div>
 					</div>
 					<div>
-						<div class="text-2xl font-bold" class:text-[var(--color-success)]={parseFloat(latest.price_change_percent || '0') > 0}
-							class:text-[var(--color-danger)]={parseFloat(latest.price_change_percent || '0') < 0}>
+						<div class="font-mono text-2xl font-semibold
+							{parseFloat(latest.price_change_percent || '0') > 5 ? 'text-[var(--color-rise)]' : parseFloat(latest.price_change_percent || '0') < -5 ? 'text-[var(--color-fall)]' : ''}">
 							{parseFloat(latest.price_change_percent || '0').toFixed(1)}%
 						</div>
-						<div class="text-[var(--color-text-muted)] text-xs">Price Change Progress</div>
+						<div class="text-[var(--color-text-2)] text-xs mt-0.5">Price pressure</div>
 					</div>
 					<div>
-						<div class="text-2xl font-bold">{latest.form || '-'}</div>
-						<div class="text-[var(--color-text-muted)] text-xs">Form</div>
+						<div class="font-mono text-2xl font-semibold">{latest.form || '-'}</div>
+						<div class="text-[var(--color-text-2)] text-xs mt-0.5">Form</div>
 					</div>
 					<div>
-						<div class="text-2xl font-bold">{latest.total_points}</div>
-						<div class="text-[var(--color-text-muted)] text-xs">Total Points</div>
+						<div class="font-mono text-2xl font-semibold">{latest.total_points}</div>
+						<div class="text-[var(--color-text-2)] text-xs mt-0.5">Points</div>
 					</div>
 				</div>
 			{/if}
@@ -120,52 +125,55 @@
 
 	<!-- Chart -->
 	{#if data.timeline.length >= 2}
-		<section class="bg-[var(--color-bg-card)] rounded-xl p-6 border border-[var(--color-border)]">
-			<h2 class="text-lg font-semibold mb-4">Price & Transfer Timeline</h2>
+		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+			<h2 class="font-display font-semibold text-lg mb-5">Timeline</h2>
 			<div bind:this={chartContainer}></div>
 		</section>
 	{:else}
-		<div class="bg-[var(--color-bg-card)] rounded-xl p-8 border border-[var(--color-border)] text-center text-[var(--color-text-muted)]">
-			<p>Collecting data... Charts will appear after a few more snapshots.</p>
+		<div class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-10 text-center">
+			<p class="text-[var(--color-text-2)]">Collecting data — charts appear after more snapshots.</p>
 		</div>
 	{/if}
 
-	<!-- Transfer Algorithm Data -->
+	<!-- Expected Points (from CSV data, if available) -->
 	{#if data.csvData}
-		<section class="bg-[var(--color-bg-card)] rounded-xl p-6 border border-[var(--color-border)]">
-			<h2 class="text-lg font-semibold mb-4">Transfer Algorithm Data</h2>
-			<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+			<h2 class="font-display font-semibold text-lg mb-5">Expected Points</h2>
+			<div class="grid grid-cols-4 sm:grid-cols-8 gap-3">
+				{#each [data.csvData.gw1, data.csvData.gw2, data.csvData.gw3, data.csvData.gw4, data.csvData.gw5, data.csvData.gw6, data.csvData.gw7, data.csvData.gw8] as pts, i}
+					{#if pts !== null}
+						<div class="text-center p-3 rounded-xl bg-[var(--color-surface-3)]">
+							<div class="text-[var(--color-text-2)] text-xs mb-1">GW{i + 1}</div>
+							<div class="font-mono font-semibold text-lg">{pts.toFixed(1)}</div>
+						</div>
+					{/if}
+				{/each}
+			</div>
+			<div class="flex gap-6 mt-5 pt-4 border-t border-[var(--color-surface-4)]">
 				<div>
-					<div class="text-xl font-bold text-[var(--color-accent)]">{data.csvData.bcv?.toFixed(2)}</div>
-					<div class="text-[var(--color-text-muted)] text-xs">BCV</div>
+					<span class="text-[var(--color-text-2)] text-sm">8-week total</span>
+					<span class="font-mono font-semibold ml-2">{data.csvData.projected_sum?.toFixed(1)}</span>
 				</div>
 				<div>
-					<div class="text-xl font-bold">{data.csvData.projected_sum?.toFixed(1)}</div>
-					<div class="text-[var(--color-text-muted)] text-xs">Projected Sum</div>
-				</div>
-				<div>
-					<div class="text-xl font-bold">{formatPrice(data.csvData.csv_price * 10)}</div>
-					<div class="text-[var(--color-text-muted)] text-xs">CSV Price</div>
-				</div>
-				<div>
-					<div class="text-xl font-bold">{data.csvData.ppg_longer_term?.toFixed(2)}</div>
-					<div class="text-[var(--color-text-muted)] text-xs">PPG (Long Term)</div>
+					<span class="text-[var(--color-text-2)] text-sm">PPG (long-term)</span>
+					<span class="font-mono font-semibold ml-2">{data.csvData.ppg_longer_term?.toFixed(2)}</span>
 				</div>
 			</div>
 		</section>
 	{/if}
 
-	<!-- Price Change History -->
+	<!-- Price History -->
 	{#if data.priceChanges.length > 0}
-		<section class="bg-[var(--color-bg-card)] rounded-xl p-6 border border-[var(--color-border)]">
-			<h2 class="text-lg font-semibold mb-4">Price Change History</h2>
-			<div class="space-y-2">
+		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+			<h2 class="font-display font-semibold text-lg mb-4">Price History</h2>
+			<div class="space-y-0">
 				{#each data.priceChanges as pc}
-					<div class="flex items-center justify-between py-2 border-b border-[var(--color-border)] last:border-0">
-						<span class="text-[var(--color-text-muted)] text-sm">
-							{new Date(pc.detected_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+					<div class="flex items-center justify-between py-3 border-b border-[var(--color-surface-4)] last:border-0">
+						<span class="text-[var(--color-text-2)] text-sm font-mono">
+							{new Date(pc.detected_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
 						</span>
-						<span class={pc.change > 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}>
+						<span class="font-mono font-semibold text-sm
+							{pc.change > 0 ? 'text-[var(--color-rise)]' : 'text-[var(--color-fall)]'}">
 							{formatPrice(pc.old_cost)} → {formatPrice(pc.new_cost)}
 						</span>
 					</div>

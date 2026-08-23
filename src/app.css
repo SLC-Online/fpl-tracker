@@ -1,25 +1,121 @@
 @import "tailwindcss";
 
-@theme {
-	/* FPL Tracker colour palette */
-	--color-bg-primary: #0f172a;      /* Slate 900 */
-	--color-bg-secondary: #1e293b;    /* Slate 800 */
-	--color-bg-card: #1e293b;
-	--color-bg-hover: #334155;        /* Slate 700 */
-	--color-border: #334155;
-	--color-text-primary: #f1f5f9;    /* Slate 100 */
-	--color-text-secondary: #94a3b8;  /* Slate 400 */
-	--color-text-muted: #64748b;      /* Slate 500 */
-	--color-accent: #38bdf8;          /* Sky 400 */
-	--color-accent-hover: #7dd3fc;    /* Sky 300 */
-	--color-success: #4ade80;         /* Green 400 */
-	--color-danger: #f87171;          /* Red 400 */
-	--color-warning: #fbbf24;         /* Amber 400 */
+/* Font faces */
+@font-face {
+	font-family: 'Sohne';
+	src: url('/fonts/Sohne-Light.otf') format('opentype');
+	font-weight: 300;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Sohne';
+	src: url('/fonts/Sohne-Regular.otf') format('opentype');
+	font-weight: 400;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Sohne';
+	src: url('/fonts/Sohne-Semibold.otf') format('opentype');
+	font-weight: 600;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Sohne';
+	src: url('/fonts/Sohne-Bold.otf') format('opentype');
+	font-weight: 700;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Sohne Mono';
+	src: url('/fonts/SohneMono-Regular.otf') format('opentype');
+	font-weight: 400;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Sohne Mono';
+	src: url('/fonts/SohneMono-Semibold.otf') format('opentype');
+	font-weight: 600;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Recoleta';
+	src: url('/fonts/Recoleta-SemiBold.woff2') format('woff2');
+	font-weight: 600;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Recoleta';
+	src: url('/fonts/Recoleta-Bold.woff2') format('woff2');
+	font-weight: 700;
+	font-display: swap;
 }
 
-/* Base styles */
+@theme {
+	--font-sans: 'Sohne', system-ui, -apple-system, sans-serif;
+	--font-mono: 'Sohne Mono', 'JetBrains Mono', monospace;
+	--font-display: 'Recoleta', Georgia, serif;
+
+	/* Palette: deep navy base with electric accents */
+	--color-surface-0: #080d19;       /* deepest background */
+	--color-surface-1: #0c1221;       /* page background */
+	--color-surface-2: #131b2e;       /* cards */
+	--color-surface-3: #1a2440;       /* card hover / elevated */
+	--color-surface-4: #243054;       /* borders, dividers */
+
+	--color-text-0: #f8fafc;          /* primary text */
+	--color-text-1: #cbd5e1;          /* secondary text */
+	--color-text-2: #64748b;          /* muted / tertiary */
+	--color-text-3: #475569;          /* disabled */
+
+	--color-accent: #6366f1;          /* indigo — primary action */
+	--color-accent-light: #818cf8;
+	--color-accent-glow: rgba(99, 102, 241, 0.15);
+
+	--color-rise: #10b981;            /* emerald — price rises */
+	--color-rise-bg: rgba(16, 185, 129, 0.1);
+	--color-fall: #ef4444;            /* red — price falls */
+	--color-fall-bg: rgba(239, 68, 68, 0.1);
+	--color-warning: #f59e0b;         /* amber */
+}
+
+/* Base */
+html {
+	background-color: var(--color-surface-0);
+}
+
 body {
-	background-color: var(--color-bg-primary);
-	color: var(--color-text-primary);
-	font-family: 'Inter', system-ui, -apple-system, sans-serif;
+	background-color: var(--color-surface-1);
+	color: var(--color-text-0);
+	font-family: var(--font-sans);
+	font-weight: 400;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Display headings */
+.font-display {
+	font-family: var(--font-display);
+}
+
+/* Mono for data */
+.font-mono {
+	font-family: var(--font-mono);
+}
+
+/* Subtle glow effect for cards */
+.card-glow {
+	box-shadow: 0 0 0 1px var(--color-surface-4),
+	            0 4px 24px -4px rgba(0, 0, 0, 0.4);
+}
+
+.card-glow:hover {
+	box-shadow: 0 0 0 1px var(--color-accent),
+	            0 4px 32px -4px rgba(99, 102, 241, 0.15);
+}
+
+/* Smooth transitions */
+* {
+	transition-property: background-color, border-color, box-shadow, opacity;
+	transition-duration: 150ms;
+	transition-timing-function: ease;
 }

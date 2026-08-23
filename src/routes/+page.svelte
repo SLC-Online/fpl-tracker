@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { playerPhotoUrl, teamBadgeUrl, POSITIONS } from '$lib/types';
+	import { teamBadgeUrl, POSITIONS } from '$lib/types';
 	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
@@ -24,40 +24,39 @@
 </script>
 
 <svelte:head>
-	<title>FPL Tracker — Price & Transfer Dashboard</title>
+	<title>FPL Tracker</title>
 </svelte:head>
 
-<div class="space-y-8">
-	<!-- Header -->
-	<div class="flex items-center justify-between">
-		<div>
-			<h1 class="text-2xl font-bold">Dashboard</h1>
-			{#if data.snapshot}
-				<p class="text-[var(--color-text-muted)] text-sm mt-1">
-					Last updated: {timeAgo(data.snapshot.timestamp)} · {data.snapshot.players_count} players tracked
-				</p>
-			{/if}
-		</div>
-	</div>
+<div class="space-y-10">
+	<!-- Hero header -->
+	<header>
+		<h1 class="font-display font-bold text-3xl sm:text-4xl tracking-tight">Overview</h1>
+		{#if data.snapshot}
+			<p class="text-[var(--color-text-2)] text-sm mt-2">
+				Updated {timeAgo(data.snapshot.timestamp)} · {data.snapshot.players_count} players
+			</p>
+		{/if}
+	</header>
 
-	<!-- Price Changes Section -->
+	<!-- Price Changes Banner (if any) -->
 	{#if data.priceChanges.length > 0}
-		<section>
-			<h2 class="text-lg font-semibold mb-4">Recent Price Changes</h2>
-			<div class="grid gap-3">
-				{#each data.priceChanges as pc}
+		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+			<h2 class="font-display font-semibold text-xl mb-4">Price Changes</h2>
+			<div class="grid gap-2">
+				{#each data.priceChanges.slice(0, 10) as pc}
+					{@const player = Array.isArray(pc.players) ? pc.players[0] : pc.players}
+					{@const team = player?.teams ? (Array.isArray(player.teams) ? player.teams[0] : player.teams) : {}}
 					<a href="/player/{pc.element_id}"
-						class="flex items-center gap-4 p-3 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors">
-						<PlayerPhoto code={pc.players.code} teamCode={pc.players.teams.code} size="40x40"
-							class="w-10 h-10 rounded-full bg-[var(--color-bg-hover)]" />
+						class="flex items-center gap-4 p-3 rounded-xl bg-[var(--color-surface-3)]/50 hover:bg-[var(--color-surface-3)] transition-all group">
+						<PlayerPhoto code={player.code} teamCode={team.code} size="40x40"
+							class="w-10 h-10 rounded-full" />
 						<div class="flex-1">
-							<span class="font-medium">{pc.players.web_name}</span>
-							<span class="text-[var(--color-text-muted)] text-sm ml-2">{pc.players.teams.short_name}</span>
+							<span class="font-semibold group-hover:text-[var(--color-accent-light)]">{player.web_name}</span>
+							<span class="text-[var(--color-text-2)] text-sm ml-2">{team.short_name}</span>
 						</div>
-						<div class="text-right">
-							<span class={pc.change > 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}>
-								{formatPrice(pc.old_cost)} → {formatPrice(pc.new_cost)}
-							</span>
+						<div class="font-mono text-sm font-semibold
+							{pc.change > 0 ? 'text-[var(--color-rise)]' : 'text-[var(--color-fall)]'}">
+							{formatPrice(pc.old_cost)} → {formatPrice(pc.new_cost)}
 						</div>
 					</a>
 				{/each}
@@ -65,51 +64,57 @@
 		</section>
 	{/if}
 
-	<!-- Risers & Fallers -->
-	<div class="grid lg:grid-cols-2 gap-8">
-		<!-- Likely to Rise -->
-		<section>
-			<h2 class="text-lg font-semibold mb-4 text-[var(--color-success)]">↑ Likely to Rise</h2>
-			<div class="space-y-2">
-				{#each data.risers as player}
+	<!-- Movers Grid -->
+	<div class="grid lg:grid-cols-2 gap-6">
+		<!-- Rising -->
+		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
+			<div class="px-6 pt-6 pb-4 flex items-center gap-3">
+				<div class="w-2 h-2 rounded-full bg-[var(--color-rise)]"></div>
+				<h2 class="font-display font-semibold text-lg">Rising</h2>
+			</div>
+			<div class="px-3 pb-3">
+				{#each data.risers.slice(0, 12) as player}
+					{@const p = Array.isArray(player.players) ? player.players[0] : player.players}
+					{@const t = p?.teams ? (Array.isArray(p.teams) ? p.teams[0] : p.teams) : {}}
 					<a href="/player/{player.element_id}"
-						class="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] hover:border-[var(--color-success)]/50 transition-colors">
-						<PlayerPhoto code={player.players.code} teamCode={player.players.teams.code} size="40x40"
-							class="w-8 h-8 rounded-full bg-[var(--color-bg-hover)]" />
-						<img src={teamBadgeUrl(player.players.teams.code)} alt=""
-							class="w-5 h-5" />
+						class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--color-rise-bg)] transition-all group">
+						<PlayerPhoto code={p.code} teamCode={t.code} size="40x40"
+							class="w-8 h-8 rounded-full" />
+						<img src={teamBadgeUrl(t.code)} alt="" class="w-4 h-4 opacity-60" />
 						<div class="flex-1 min-w-0">
-							<span class="font-medium truncate">{player.players.web_name}</span>
-							<span class="text-[var(--color-text-muted)] text-xs ml-1">{formatPrice(player.now_cost)}</span>
+							<span class="font-medium text-sm group-hover:text-[var(--color-rise)]">{p.web_name}</span>
 						</div>
-						<div class="text-right text-sm">
-							<div class="text-[var(--color-success)] font-mono">+{formatPct(player.price_change_percent)}%</div>
-							<div class="text-[var(--color-text-muted)] text-xs">{player.transfers_in_event?.toLocaleString()} in</div>
-						</div>
+						<span class="text-[var(--color-text-2)] text-xs font-mono">{formatPrice(player.now_cost)}</span>
+						<span class="text-[var(--color-rise)] text-xs font-mono font-semibold w-14 text-right">
+							+{formatPct(player.price_change_percent)}%
+						</span>
 					</a>
 				{/each}
 			</div>
 		</section>
 
-		<!-- Likely to Fall -->
-		<section>
-			<h2 class="text-lg font-semibold mb-4 text-[var(--color-danger)]">↓ Likely to Fall</h2>
-			<div class="space-y-2">
-				{#each data.fallers as player}
+		<!-- Falling -->
+		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
+			<div class="px-6 pt-6 pb-4 flex items-center gap-3">
+				<div class="w-2 h-2 rounded-full bg-[var(--color-fall)]"></div>
+				<h2 class="font-display font-semibold text-lg">Falling</h2>
+			</div>
+			<div class="px-3 pb-3">
+				{#each data.fallers.slice(0, 12) as player}
+					{@const p = Array.isArray(player.players) ? player.players[0] : player.players}
+					{@const t = p?.teams ? (Array.isArray(p.teams) ? p.teams[0] : p.teams) : {}}
 					<a href="/player/{player.element_id}"
-						class="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border)] hover:border-[var(--color-danger)]/50 transition-colors">
-						<PlayerPhoto code={player.players.code} teamCode={player.players.teams.code} size="40x40"
-							class="w-8 h-8 rounded-full bg-[var(--color-bg-hover)]" />
-						<img src={teamBadgeUrl(player.players.teams.code)} alt=""
-							class="w-5 h-5" />
+						class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--color-fall-bg)] transition-all group">
+						<PlayerPhoto code={p.code} teamCode={t.code} size="40x40"
+							class="w-8 h-8 rounded-full" />
+						<img src={teamBadgeUrl(t.code)} alt="" class="w-4 h-4 opacity-60" />
 						<div class="flex-1 min-w-0">
-							<span class="font-medium truncate">{player.players.web_name}</span>
-							<span class="text-[var(--color-text-muted)] text-xs ml-1">{formatPrice(player.now_cost)}</span>
+							<span class="font-medium text-sm group-hover:text-[var(--color-fall)]">{p.web_name}</span>
 						</div>
-						<div class="text-right text-sm">
-							<div class="text-[var(--color-danger)] font-mono">{formatPct(player.price_change_percent)}%</div>
-							<div class="text-[var(--color-text-muted)] text-xs">{player.transfers_out_event?.toLocaleString()} out</div>
-						</div>
+						<span class="text-[var(--color-text-2)] text-xs font-mono">{formatPrice(player.now_cost)}</span>
+						<span class="text-[var(--color-fall)] text-xs font-mono font-semibold w-14 text-right">
+							{formatPct(player.price_change_percent)}%
+						</span>
 					</a>
 				{/each}
 			</div>
