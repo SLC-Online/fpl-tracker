@@ -110,7 +110,8 @@ export function playerPhotoFallback(teamCode: number, isGk = false): string {
 }
 
 export function teamBadgeUrl(teamCode: number): string {
-	return `https://resources.premierleague.com/premierleague/badges/rb/t${teamCode}.svg`;
+	// SVGs are missing for some promoted clubs — use PNG which always works
+	return `https://resources.premierleague.com/premierleague/badges/100/t${teamCode}.png`;
 }
 
 export function teamShirtUrl(teamCode: number, isGk = false): string {
