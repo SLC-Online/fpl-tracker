@@ -35,7 +35,7 @@ export const load: PageServerLoad = async () => {
 	// Get CSV expected points data (latest gameweek)
 	const { data: csvData } = await supabase
 		.from('csv_imports')
-		.select('element_id, bcv, projected_sum, gw1, gw2, gw3, gw4, gw5, gw6, gw7, gw8, ppg_longer_term')
+		.select('element_id, bcv, projected_sum, gw1, gw2, gw3, gw4, gw5, gw6, gw7, gw8, ppg_longer_term, gameweek')
 		.order('gameweek', { ascending: false })
 		.limit(700);
 
@@ -47,9 +47,38 @@ export const load: PageServerLoad = async () => {
 		}
 	}
 
+	// Get current gameweek info to determine which GWs to skip
+	const { data: currentEvent } = await supabase
+		.from('events')
+		.select('event_id, is_current, is_next, finished, deadline_time')
+		.eq('is_current', true)
+		.limit(1)
+		.single();
+
+	const { data: nextEvent } = await supabase
+		.from('events')
+		.select('event_id')
+		.eq('is_next', true)
+		.limit(1)
+		.single();
+
+	// If GW1 is current (kicked off), expected points should start from GW2
+	// csvGwOffset = number of GWs to skip from the CSV data
+	// e.g. CSV was uploaded before GW1, so gw1 = GW1 projections
+	// If GW1 has kicked off, skip gw1 column, start from gw2
+	let csvGwOffset = 0;
+	if (currentEvent && csvData && csvData.length > 0) {
+		const csvGameweek = csvData[0]?.gameweek || 1;
+		// If current GW > the GW the CSV was uploaded for, offset by the difference
+		csvGwOffset = Math.max(0, currentEvent.event_id - csvGameweek);
+	}
+
 	return {
 		players: players || [],
 		teams: teams || [],
-		csvLookup
+		csvLookup,
+		csvGwOffset,
+		currentGw: currentEvent?.event_id || 1,
+		nextGw: nextEvent?.event_id || 2,
 	};
 };

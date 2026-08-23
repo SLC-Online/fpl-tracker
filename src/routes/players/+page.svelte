@@ -13,6 +13,11 @@
 
 	const DECAY = 0.85;
 
+	// csvGwOffset: how many GW columns to skip (e.g. if GW1 has kicked off, skip gw1)
+	$effect(() => {
+		// This just ensures we react to data changes
+	});
+
 	function formatPrice(cost: number): string {
 		return `£${(cost / 10).toFixed(1)}`;
 	}
@@ -26,7 +31,9 @@
 	function getTimeWeightedXP(elementId: number): number | null {
 		const csv = data.csvLookup?.[elementId];
 		if (!csv) return null;
-		const gws = [csv.gw1, csv.gw2, csv.gw3, csv.gw4, csv.gw5, csv.gw6, csv.gw7, csv.gw8];
+		const allGws = [csv.gw1, csv.gw2, csv.gw3, csv.gw4, csv.gw5, csv.gw6, csv.gw7, csv.gw8];
+		// Skip gameweeks that have already kicked off
+		const gws = allGws.slice(data.csvGwOffset || 0);
 		let total = 0;
 		let hasData = false;
 		for (let i = 0; i < gws.length; i++) {
@@ -36,6 +43,25 @@
 			}
 		}
 		return hasData ? total : null;
+	}
+
+	function getRemainingGws(elementId: number): { gw: number; pts: number; weight: number }[] {
+		const csv = data.csvLookup?.[elementId];
+		if (!csv) return [];
+		const allGws = [csv.gw1, csv.gw2, csv.gw3, csv.gw4, csv.gw5, csv.gw6, csv.gw7, csv.gw8];
+		const offset = data.csvGwOffset || 0;
+		const csvGameweek = csv.gameweek || 1;
+		const result: { gw: number; pts: number; weight: number }[] = [];
+		for (let i = offset; i < allGws.length; i++) {
+			if (allGws[i] !== null && allGws[i] !== undefined) {
+				result.push({
+					gw: csvGameweek + i,
+					pts: allGws[i],
+					weight: Math.pow(DECAY, i - offset)
+				});
+			}
+		}
+		return result;
 	}
 
 	function getSortValue(row: any): number {
@@ -181,8 +207,7 @@
 						onclick={() => toggleExpand(row.element_id)}>
 						<td class="px-5 py-3">
 							<div class="flex items-center gap-3">
-								<PlayerPhoto code={player.code} teamCode={player.teams.code} size="40x40"
-									class="w-8 h-8 rounded-full" />
+								<img src={teamBadgeUrl(player.teams.code)} alt="" class="w-7 h-7" />
 								<div>
 									<a href="/player/{row.element_id}" class="font-medium text-sm hover:text-[var(--color-accent-light)]"
 										onclick={(e) => e.stopPropagation()}>{player.web_name}</a>
@@ -213,16 +238,19 @@
 							<td colspan="7" class="px-5 py-4">
 								<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
 									{#if data.csvLookup?.[row.element_id]}
-										{@const csv = data.csvLookup[row.element_id]}
-										{#each [csv.gw1, csv.gw2, csv.gw3, csv.gw4, csv.gw5, csv.gw6, csv.gw7, csv.gw8] as pts, i}
-											{#if pts !== null && pts !== undefined}
-												<div class="text-center p-2.5 rounded-lg bg-[var(--color-surface-2)]">
-													<div class="text-[var(--color-text-2)] text-xs mb-1">GW{i + 1}</div>
-													<div class="font-mono font-semibold">{pts.toFixed(1)}</div>
-													<div class="text-[var(--color-text-3)] text-xs mt-0.5">×{Math.pow(DECAY, i).toFixed(2)}</div>
-												</div>
-											{/if}
+										{@const remainingGws = getRemainingGws(row.element_id)}
+										{#each remainingGws as gw, i}
+											<div class="text-center p-2.5 rounded-lg bg-[var(--color-surface-2)]">
+												<div class="text-[var(--color-text-2)] text-xs mb-1">GW{gw.gw}</div>
+												<div class="font-mono font-semibold">{gw.pts.toFixed(1)}</div>
+												<div class="text-[var(--color-text-3)] text-xs mt-0.5">×{gw.weight.toFixed(2)}</div>
+											</div>
 										{/each}
+										{#if remainingGws.length === 0}
+											<div class="col-span-full text-[var(--color-text-2)] text-sm">
+												All projected gameweeks have passed. Awaiting new data.
+											</div>
+										{/if}
 									{:else}
 										<div class="col-span-full text-[var(--color-text-2)] text-sm">
 											No expected points data available for this player.

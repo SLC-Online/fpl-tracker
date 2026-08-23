@@ -78,9 +78,7 @@
 					{@const t = p?.teams ? (Array.isArray(p.teams) ? p.teams[0] : p.teams) : {}}
 					<a href="/player/{player.element_id}"
 						class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--color-rise-bg)] transition-all group">
-						<PlayerPhoto code={p.code} teamCode={t.code} size="40x40"
-							class="w-8 h-8 rounded-full" />
-						<img src={teamBadgeUrl(t.code)} alt="" class="w-4 h-4 opacity-60" />
+						<img src={teamBadgeUrl(t.code)} alt="" class="w-6 h-6" />
 						<div class="flex-1 min-w-0">
 							<span class="font-medium text-sm group-hover:text-[var(--color-rise)]">{p.web_name}</span>
 						</div>
@@ -105,9 +103,7 @@
 					{@const t = p?.teams ? (Array.isArray(p.teams) ? p.teams[0] : p.teams) : {}}
 					<a href="/player/{player.element_id}"
 						class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--color-fall-bg)] transition-all group">
-						<PlayerPhoto code={p.code} teamCode={t.code} size="40x40"
-							class="w-8 h-8 rounded-full" />
-						<img src={teamBadgeUrl(t.code)} alt="" class="w-4 h-4 opacity-60" />
+						<img src={teamBadgeUrl(t.code)} alt="" class="w-6 h-6" />
 						<div class="flex-1 min-w-0">
 							<span class="font-medium text-sm group-hover:text-[var(--color-fall)]">{p.web_name}</span>
 						</div>
