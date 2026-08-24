@@ -24,15 +24,15 @@
 	<h1 class="text-2xl font-bold">Price Changes</h1>
 
 	{#if data.priceChanges.length === 0}
-		<div class="bg-[var(--color-bg-card)] rounded-xl p-8 border border-[var(--color-border)] text-center">
-			<p class="text-[var(--color-text-muted)]">No price changes detected yet.</p>
-			<p class="text-[var(--color-text-muted)] text-sm mt-2">Prices typically change overnight around 02:30 BST.</p>
+		<div class="bg-[var(--color-surface-2)] rounded-xl p-8 border border-[var(--color-surface-4)] text-center">
+			<p class="text-[var(--color-text-2)]">No price changes detected yet.</p>
+			<p class="text-[var(--color-text-2)] text-sm mt-2">Prices typically change overnight around 02:30 BST.</p>
 		</div>
 	{:else}
-		<div class="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] overflow-hidden">
+		<div class="bg-[var(--color-surface-2)] rounded-xl border border-[var(--color-surface-4)] overflow-hidden">
 			<table class="w-full">
 				<thead>
-					<tr class="border-b border-[var(--color-border)] text-[var(--color-text-muted)] text-sm">
+					<tr class="border-b border-[var(--color-surface-4)] text-[var(--color-text-2)] text-sm">
 						<th class="text-left p-4">Player</th>
 						<th class="text-left p-4">Team</th>
 						<th class="text-right p-4">Old</th>
@@ -45,11 +45,11 @@
 				<tbody>
 					{#each data.priceChanges as pc}
 					{@const player = getPlayer(pc)}
-						<tr class="border-b border-[var(--color-border)] hover:bg-[var(--color-bg-hover)] transition-colors">
+						<tr class="border-b border-[var(--color-surface-4)] hover:bg-[var(--color-surface-3)] transition-colors">
 							<td class="p-4">
 								<a href="/player/{pc.element_id}" class="flex items-center gap-3 hover:text-[var(--color-accent)]">
 									<PlayerPhoto code={player.code} teamCode={player.teams.code} size="40x40"
-										class="w-8 h-8 rounded-full bg-[var(--color-bg-hover)]" />
+										class="w-8 h-8 rounded-full bg-[var(--color-surface-3)]" />
 									<span class="font-medium">{player.web_name}</span>
 								</a>
 							</td>
@@ -65,7 +65,7 @@
 								{pc.change > 0 ? '+' : ''}{formatPrice(pc.change * 10 + (pc.change > 0 ? 0 : 0))}
 							</td>
 							<td class="p-4 text-right text-[var(--color-text-secondary)]">{pc.selected_by_percent}%</td>
-							<td class="p-4 text-right text-[var(--color-text-muted)] text-sm">
+							<td class="p-4 text-right text-[var(--color-text-2)] text-sm">
 								{new Date(pc.detected_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
 							</td>
 						</tr>
