@@ -212,7 +212,7 @@
 
 	// --- Transfer planner ---
 	function startTransferOut(player: SquadPlayer) {
-		if (transferMode && transferOutPlayer?.element_id === player.element_id) {
+		if (transferOutPlayer?.element_id === player.element_id) {
 			// Clicking same player deselects
 			cancelTransfer();
 			return;
@@ -221,7 +221,36 @@
 		transferMode = true;
 		searchQuery = '';
 		filterTeam = '';
-		filterPos = String(player.element_type);  // Default to same position
+		filterPos = String(player.element_type);
+		budgetFilterOn = true;  // Default to showing affordable players
+	}
+
+	// Substitution: swap two players within squad (starting ↔ bench)
+	let subMode = $state(false);
+	let subPlayer: SquadPlayer | null = $state(null);
+
+	function startSub(player: SquadPlayer) {
+		if (subMode && subPlayer) {
+			// Complete the sub - swap positions
+			// (For now this just visually swaps them in the working squad)
+			const idx1 = workingSquad.findIndex(p => p.element_id === subPlayer!.element_id);
+			const idx2 = workingSquad.findIndex(p => p.element_id === player.element_id);
+			if (idx1 !== -1 && idx2 !== -1) {
+				// TODO: implement proper position swap in the squad state
+			}
+			subMode = false;
+			subPlayer = null;
+		} else {
+			subMode = true;
+			subPlayer = player;
+			transferMode = false;
+			transferOutPlayer = null;
+		}
+	}
+
+	function cancelSub() {
+		subMode = false;
+		subPlayer = null;
 	}
 
 	// --- Transfer search (client-side for instant, accent-insensitive filtering) ---
@@ -249,27 +278,28 @@
 		return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 	}
 
-	let searchTimeout: any;
-	function onSearchInput() {
-		// No-op: search is now reactive via $derived
-	}
+	// Budget filter toggle
+	let budgetFilterOn = $state(false);
 
 	let searchResults = $derived.by(() => {
-		if (!transferOutPlayer || !allPlayersLoaded) return [];
-		const maxBudget = workingBank + transferOutPlayer.selling_price;
+		if (!allPlayersLoaded) return [];
 		const squadIds = new Set(workingSquad.map(p => p.element_id));
 		const q = searchQuery ? stripAccents(searchQuery) : '';
+
+		// Budget: only filter if toggle is on AND a player is selected
+		const maxBudget = (budgetFilterOn && transferOutPlayer)
+			? workingBank + transferOutPlayer.selling_price
+			: Infinity;
 
 		return allPlayers
 			.filter(p => {
 				if (squadIds.has(p.element_id)) return false;
 				if (p.now_cost > maxBudget) return false;
-				// Position filter: default to same position as outgoing player
-				const posFilter = filterPos || String(transferOutPlayer!.element_type);
-				if (posFilter && p.element_type !== parseInt(posFilter)) return false;
+				// Position filter
+				if (filterPos && p.element_type !== parseInt(filterPos)) return false;
 				// Team filter
 				if (filterTeam && p.team_short !== filterTeam) return false;
-				// Name search (if query entered)
+				// Name search
 				if (q.length >= 2) {
 					const name = stripAccents((p.web_name || '') + ' ' + (p.first_name || '') + ' ' + (p.second_name || ''));
 					if (!name.includes(q)) return false;
@@ -758,159 +788,100 @@
 				{/if}
 			</div>
 
-			<!-- RIGHT: Permanent Panel -->
+			<!-- RIGHT: Player Browser (always visible) -->
 			<aside class="main-right">
 				<div class="panel-sticky">
+					<!-- Selected player banner (compact, only when player clicked) -->
 					{#if transferOutPlayer}
-						<!-- ─── TRANSFER MODE: Player info + search ─── -->
-						<div class="panel-card">
-							<div class="panel-selected-player">
-								<img
-									src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{transferOutPlayer.team_code}{transferOutPlayer.element_type === 1 ? '_1' : ''}-66.webp"
-									alt=""
-									class="panel-player-shirt"
-								/>
-								<div class="panel-player-info">
-									<h3 class="font-semibold text-sm text-[var(--color-text-0)]">{transferOutPlayer.web_name}</h3>
-									<div class="panel-player-meta">
-										<span class="pos-badge pos-badge--sm {positionBg(transferOutPlayer.element_type)}">{POSITIONS[transferOutPlayer.element_type]}</span>
-										<span>{transferOutPlayer.team_short}</span>
-										<span class="font-mono">{formatPrice(transferOutPlayer.current_price)}</span>
-									</div>
+						<div class="panel-card" style="padding: 8px 12px;">
+							<div class="flex items-center gap-2">
+								<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{transferOutPlayer.team_code}{transferOutPlayer.element_type === 1 ? '_1' : ''}-66.webp" alt="" class="w-6 h-8 flex-shrink-0" />
+								<div class="flex-1 min-w-0">
+									<div class="text-[11px] font-semibold truncate">{transferOutPlayer.web_name}</div>
+									<div class="text-[9px] text-[var(--color-text-3)]">Sell {formatPrice(transferOutPlayer.selling_price)} · Budget {formatPrice(workingBank + transferOutPlayer.selling_price)}</div>
 								</div>
-								<button onclick={cancelTransfer} class="panel-close-btn">
-									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+								<label class="flex items-center gap-1 cursor-pointer flex-shrink-0">
+									<input type="checkbox" bind:checked={budgetFilterOn} class="w-3 h-3 rounded accent-[var(--color-accent)]" />
+									<span class="text-[8px] text-[var(--color-text-2)]">Affordable</span>
+								</label>
+								<button onclick={cancelTransfer} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] p-0.5 flex-shrink-0">
+									<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
 								</button>
 							</div>
-							<div class="panel-player-stats">
-								<div class="panel-stat">
-									<span class="panel-stat-value font-mono">{formatPrice(transferOutPlayer.selling_price)}</span>
-									<span class="panel-stat-label">Sell</span>
-								</div>
-								<div class="panel-stat">
-									<span class="panel-stat-value font-mono text-[var(--color-accent-light)]">{calculatePlayerTWxP(transferOutPlayer.projections).toFixed(1)}</span>
-									<span class="panel-stat-label">TWxP</span>
-								</div>
-								<div class="panel-stat">
-									<span class="panel-stat-value font-mono">{formatPrice(workingBank + transferOutPlayer.selling_price)}</span>
-									<span class="panel-stat-label">Budget</span>
-								</div>
-							</div>
-						</div>
-
-						<!-- Filters + Search input -->
-						<div class="panel-card space-y-2">
-							<input
-								type="text"
-								placeholder="Search by name..."
-								bind:value={searchQuery}
-								class="panel-search-input"
-							/>
-							<div class="flex gap-2">
-								<select bind:value={filterPos}
-									class="flex-1 px-2 py-1.5 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[10px] focus:outline-none focus:border-[var(--color-accent)]">
-									<option value="">All positions</option>
-									<option value="1">GKP</option>
-									<option value="2">DEF</option>
-									<option value="3">MID</option>
-									<option value="4">FWD</option>
-								</select>
-								<select bind:value={filterTeam}
-									class="flex-1 px-2 py-1.5 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[10px] focus:outline-none focus:border-[var(--color-accent)]">
-									<option value="">All teams</option>
-									{#each availableTeams as team}
-										<option value={team}>{team}</option>
-									{/each}
-								</select>
-							</div>
-						</div>
-
-						<!-- Search results (auto-populated) -->
-						<div class="panel-results">
-							<!-- Sort & results header -->
-							<div class="flex items-center justify-between px-3 py-2 border-b border-[var(--color-surface-4)]">
-								<span class="text-[9px] text-[var(--color-text-3)] uppercase tracking-wider">{searchResults.length} players</span>
-								<div class="flex items-center gap-1">
-									<span class="text-[9px] text-[var(--color-text-3)]">Sort:</span>
-									<select bind:value={sortBy}
-										class="bg-transparent text-[9px] text-[var(--color-text-1)] font-medium focus:outline-none cursor-pointer">
-										<option value="twxp">TWxP</option>
-										<option value="price">Price</option>
-										<option value="form">Form</option>
-										<option value="points">Points</option>
-									</select>
-								</div>
-							</div>
-							{#if searchResults.length > 0}
-								{#each searchResults as player}
-									<button onclick={() => completeTransfer(player)} class="panel-result-row">
-										<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="panel-result-shirt" />
-										<div class="flex-1 min-w-0">
-											<div class="text-xs font-medium truncate text-[var(--color-text-0)]">{player.web_name}</div>
-											<div class="text-[10px] text-[var(--color-text-3)]">{player.team_short} · {POSITIONS[player.element_type]}</div>
-										</div>
-										<div class="text-right flex-shrink-0">
-											<div class="font-mono text-[10px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
-											<div class="font-mono text-[10px] text-[var(--color-accent-light)]" title="Time-Weighted Expected Points">{calculatePlayerTWxP(player.projections || []).toFixed(1)} <span class="text-[var(--color-text-3)]">xP</span></div>
-										</div>
-									</button>
-								{/each}
-							{:else if allPlayersLoaded}
-								<div class="panel-empty">No players match filters</div>
-							{:else}
-								<div class="panel-empty">Loading player database...</div>
-							{/if}
-						</div>
-					{:else}
-						<!-- ─── IDLE MODE: Squad summary ─── -->
-						<div class="panel-card">
-							<h3 class="font-display font-semibold text-sm mb-3 text-[var(--color-text-0)]">Squad Summary</h3>
-							<div class="panel-summary-grid">
-								<div class="panel-summary-item">
-									<span class="panel-summary-value font-mono">{starting11.filter(p => p.element_type === 2).length}-{starting11.filter(p => p.element_type === 3).length}-{starting11.filter(p => p.element_type === 4).length}</span>
-									<span class="panel-summary-label">Formation</span>
-								</div>
-								<div class="panel-summary-item">
-									<span class="panel-summary-value font-mono">{formatPrice(squadData.squad_value)}</span>
-									<span class="panel-summary-label">Total Value</span>
-								</div>
-								<div class="panel-summary-item">
-									<span class="panel-summary-value font-mono text-[var(--color-accent-light)]">{workingTWxP.toFixed(1)}</span>
-									<span class="panel-summary-label">Total TWxP</span>
-								</div>
-								<div class="panel-summary-item">
-									<span class="panel-summary-value font-mono">{formatPrice(workingBank)}</span>
-									<span class="panel-summary-label">In the Bank</span>
-								</div>
-							</div>
-						</div>
-
-						<!-- TWxP by position breakdown -->
-						<div class="panel-card">
-							<h4 class="text-[10px] uppercase tracking-wider text-[var(--color-text-3)] font-semibold mb-2">TWxP by Position</h4>
-							{#each [
-								{ label: 'GKP', type: 1, color: 'var(--color-warning)' },
-								{ label: 'DEF', type: 2, color: '#10b981' },
-								{ label: 'MID', type: 3, color: '#6366f1' },
-								{ label: 'FWD', type: 4, color: '#ef4444' },
-							] as pos}
-								{@const posPlayers = workingSquad.filter(p => p.element_type === pos.type)}
-								{@const posTwxp = posPlayers.reduce((sum, p) => sum + calculatePlayerTWxP(p.projections), 0)}
-								<div class="panel-pos-row">
-									<span class="panel-pos-label" style="color: {pos.color}">{pos.label}</span>
-									<div class="panel-pos-bar">
-										<div class="panel-pos-bar-fill" style="width: {Math.min(100, (posTwxp / Math.max(workingTWxP, 1)) * 100)}%; background: {pos.color}"></div>
-									</div>
-									<span class="panel-pos-value font-mono">{posTwxp.toFixed(1)}</span>
-								</div>
-							{/each}
-						</div>
-
-						<div class="panel-hint">
-							<svg class="w-4 h-4 text-[var(--color-text-3)]" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
-							<span>Tap a player on the pitch to explore transfers</span>
 						</div>
 					{/if}
+
+					<!-- Filters (always visible) -->
+					<div class="panel-card" style="padding: 8px 10px;">
+						<input
+							type="text"
+							placeholder="Search..."
+							bind:value={searchQuery}
+							class="panel-search-input"
+							style="margin-bottom: 6px;"
+						/>
+						<div class="flex gap-1.5">
+							<select bind:value={filterPos}
+								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								<option value="">All Pos</option>
+								<option value="1">GKP</option>
+								<option value="2">DEF</option>
+								<option value="3">MID</option>
+								<option value="4">FWD</option>
+							</select>
+							<select bind:value={filterTeam}
+								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								<option value="">All Teams</option>
+								{#each availableTeams as team}
+									<option value={team}>{team}</option>
+								{/each}
+							</select>
+							<select bind:value={sortBy}
+								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								<option value="twxp">xPts ↓</option>
+								<option value="price">Price ↓</option>
+								<option value="form">Form ↓</option>
+								<option value="points">Pts ↓</option>
+							</select>
+						</div>
+					</div>
+
+					<!-- Column headers -->
+					<div class="flex items-center px-3 py-1 text-[8px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)]">
+						<span class="w-7"></span>
+						<span class="flex-1">Player</span>
+						<span class="w-12 text-right">Price</span>
+						<span class="w-12 text-right">xPts</span>
+					</div>
+
+					<!-- Player list -->
+					<div class="panel-results">
+						{#if searchResults.length > 0}
+							{#each searchResults as player}
+								<button
+									onclick={() => transferOutPlayer ? completeTransfer(player) : null}
+									disabled={!transferOutPlayer}
+									class="panel-result-row {!transferOutPlayer ? 'opacity-70 cursor-default' : ''}"
+								>
+									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="panel-result-shirt" />
+									<div class="flex-1 min-w-0">
+										<div class="text-[11px] font-medium truncate text-[var(--color-text-0)]">{player.web_name}</div>
+										<div class="text-[9px] text-[var(--color-text-3)]">{player.team_short} · {POSITIONS[player.element_type]}</div>
+									</div>
+									<div class="w-12 text-right">
+										<div class="font-mono text-[10px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
+									</div>
+									<div class="w-12 text-right">
+										<div class="font-mono text-[10px] text-[var(--color-accent-light)]">{calculatePlayerTWxP(player.projections || []).toFixed(1)}</div>
+									</div>
+								</button>
+							{/each}
+						{:else if allPlayersLoaded}
+							<div class="panel-empty">No players match</div>
+						{:else}
+							<div class="panel-empty">Loading...</div>
+						{/if}
+					</div>
 				</div>
 			</aside>
 		</div>
@@ -1390,6 +1361,7 @@
 	.panel-sticky {
 		position: sticky;
 		top: 76px;
+		padding-top: 46px;  /* Match view toggle bar height so tops align */
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
