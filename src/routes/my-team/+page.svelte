@@ -392,6 +392,64 @@
 		return [...teams].sort();
 	});
 
+	// GW columns available in the player data (for the right panel table)
+	let panelGwColumns = $derived.by(() => {
+		const gws = new Set<number>();
+		for (const p of searchResults) {
+			for (const proj of (p.projections || [])) {
+				gws.add(proj.gw);
+			}
+		}
+		return [...gws].sort((a, b) => a - b).slice(0, 6);
+	});
+
+	// Min/max expected points per GW column (for relative colour coding)
+	let gwMinMax = $derived.by(() => {
+		const result: Record<number, { min: number; max: number }> = {};
+		for (const gw of panelGwColumns) {
+			let min = Infinity, max = -Infinity;
+			for (const p of searchResults) {
+				const proj = (p.projections || []).find((pr: any) => pr.gw === gw);
+				if (proj) {
+					if (proj.pts < min) min = proj.pts;
+					if (proj.pts > max) max = proj.pts;
+				}
+			}
+			result[gw] = { min: min === Infinity ? 0 : min, max: max === -Infinity ? 0 : max };
+		}
+		return result;
+	});
+
+	// Colour scale: maps a value within a GW's range to a background colour
+	// High (relative) = rich green, mid = pale yellow, low = pale red/white
+	function gwCellColor(pts: number, gw: number): string {
+		const { min, max } = gwMinMax[gw] || { min: 0, max: 1 };
+		const range = max - min || 1;
+		const ratio = (pts - min) / range; // 0 = lowest, 1 = highest
+
+		if (ratio > 0.75) {
+			// Rich green
+			const intensity = Math.round(40 + (ratio - 0.75) * 4 * 30); // 40-70% green
+			return `rgba(22, 163, 74, ${intensity / 100})`;
+		} else if (ratio > 0.4) {
+			// Yellow-green
+			const intensity = Math.round(20 + (ratio - 0.4) * (100/35) * 20);
+			return `rgba(202, 138, 4, ${intensity / 100})`;
+		} else if (ratio > 0.15) {
+			// Pale/neutral
+			return `rgba(255, 255, 255, 0.03)`;
+		} else {
+			// Low - pale red
+			const intensity = Math.round(15 + (0.15 - ratio) * (100/15) * 25);
+			return `rgba(239, 68, 68, ${intensity / 100})`;
+		}
+	}
+
+	function getPlayerGwPtsPanel(player: any, gw: number): number | null {
+		const proj = (player.projections || []).find((p: any) => p.gw === gw);
+		return proj ? proj.pts : null;
+	}
+
 	function completeTransfer(inPlayer: any) {
 		if (!transferOutPlayer) return;
 		const inSquadPlayer: SquadPlayer = {
@@ -941,54 +999,61 @@
 						</div>
 					</div>
 
-					<!-- Column headers (click to toggle sort direction) -->
-					<div class="flex items-center px-3 py-1.5 text-[8px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)]">
-						<span class="w-7"></span>
-						<span class="flex-1">Player</span>
-						<span class="w-12 text-right">Price</span>
-						<button onclick={() => sortAsc = !sortAsc}
-							class="w-14 text-right cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
-							{#if sortBy === 'twxp'}xPts{:else if sortBy === 'ep_next'}xP Nxt{:else if sortBy === 'form'}Form{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TI{:else if sortBy === 'xg'}xG{:else if sortBy === 'price'}Price{:else}{sortBy}{/if}
-							{sortAsc ? '↑' : '↓'}
-						</button>
+					<!-- Column headers -->
+					<div class="overflow-x-auto">
+						<div class="min-w-[400px]">
+							<div class="grid items-center px-2 py-1.5 text-[7px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)] gap-x-1"
+								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 32px) 40px;">
+								<span></span>
+								<span>Player</span>
+								<span class="text-right">£</span>
+								{#each panelGwColumns as gw}
+									<span class="text-center">{gw}</span>
+								{/each}
+								<button onclick={() => sortAsc = !sortAsc}
+									class="text-right cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
+									{#if sortBy === 'twxp'}Σ{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Frm{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TI{:else if sortBy === 'xg'}xG{:else if sortBy === 'price'}£{:else}{sortBy}{/if}
+									{sortAsc ? '↑' : '↓'}
+								</button>
+							</div>
+						</div>
 					</div>
 
-					<!-- Player list -->
-					<div class="panel-results">
+					<!-- Player list with GW colour-coded cells -->
+					<div class="panel-results overflow-x-auto">
+						<div class="min-w-[400px]">
 						{#if searchResults.length > 0}
 							{#each searchResults as player}
 								<button
 									onclick={() => transferOutPlayer ? completeTransfer(player) : null}
 									disabled={!transferOutPlayer}
-									class="panel-result-row {!transferOutPlayer ? 'opacity-70 cursor-default' : ''}"
+									class="w-full grid items-center px-2 py-1.5 gap-x-1 hover:bg-white/[0.03] transition-colors text-left border-b border-[var(--color-surface-4)]/30 {!transferOutPlayer ? 'opacity-70 cursor-default' : 'cursor-pointer'}"
+									style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 32px) 40px;"
 								>
-									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="panel-result-shirt" />
-									<div class="flex-1 min-w-0">
-										<div class="text-[11px] font-medium truncate text-[var(--color-text-0)]">{player.web_name}</div>
-										<div class="text-[9px] text-[var(--color-text-3)]">{player.team_short} · {POSITIONS[player.element_type]}</div>
+									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7" />
+									<div class="min-w-0">
+										<div class="text-[10px] font-medium truncate text-[var(--color-text-0)]">{player.web_name}</div>
+										<div class="text-[8px] text-[var(--color-text-3)]">{player.team_short}</div>
 									</div>
-									<div class="w-12 text-right">
-										<div class="font-mono text-[10px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
-									</div>
-									<div class="w-14 text-right">
-										<div class="font-mono text-[10px] text-[var(--color-accent-light)]">
-											{#if sortBy === 'price'}{formatPrice(player.now_cost)}
-											{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
-											{:else if sortBy === 'form'}{player.form || '-'}
-											{:else if sortBy === 'points'}{player.total_points || 0}
-											{:else if sortBy === 'transfers_in'}{(player.transfers_in_event || 0).toLocaleString()}
-											{:else if sortBy === 'xg'}{player.expected_goals || '-'}
-											{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
-											{/if}
+									<div class="text-right font-mono text-[9px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
+									{#each panelGwColumns as gw}
+										{@const pts = getPlayerGwPtsPanel(player, gw)}
+										<div class="text-center font-mono text-[9px] rounded px-0.5 py-0.5"
+											style="background: {pts !== null ? gwCellColor(pts, gw) : 'transparent'}">
+											{pts !== null ? pts.toFixed(1) : '-'}
 										</div>
+									{/each}
+									<div class="text-right font-mono text-[9px] font-semibold text-[var(--color-accent-light)]">
+										{calculatePlayerTWxP(player.projections || []).toFixed(1)}
 									</div>
 								</button>
 							{/each}
 						{:else if allPlayersLoaded}
-							<div class="panel-empty">No players match</div>
+							<div class="p-4 text-center text-[var(--color-text-2)] text-[10px]">No players match</div>
 						{:else}
-							<div class="panel-empty">Loading...</div>
+							<div class="p-4 text-center text-[var(--color-text-2)] text-[10px]">Loading...</div>
 						{/if}
+						</div>
 					</div>
 				</div>
 			</aside>
