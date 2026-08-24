@@ -894,17 +894,14 @@
 						</div>
 					</div>
 
-					<!-- Column headers (clickable to toggle sort direction) -->
+					<!-- Column headers (click to toggle sort direction) -->
 					<div class="flex items-center px-3 py-1.5 text-[8px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)]">
 						<span class="w-7"></span>
 						<span class="flex-1">Player</span>
-						<button onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; } }}
-							class="w-12 text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">
-							Price {sortBy === 'price' ? (sortAsc ? '↑' : '↓') : ''}
-						</button>
-						<button onclick={() => { sortAsc = !sortAsc; }}
+						<span class="w-12 text-right">Price</span>
+						<button onclick={() => sortAsc = !sortAsc}
 							class="w-14 text-right cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
-							{#if sortBy === 'twxp'}xPts{:else if sortBy === 'ep_next'}xP Nxt{:else if sortBy === 'form'}Form{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TI{:else if sortBy === 'xg'}xG{:else}{sortBy}{/if}
+							{#if sortBy === 'twxp'}xPts{:else if sortBy === 'ep_next'}xP Nxt{:else if sortBy === 'form'}Form{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TI{:else if sortBy === 'xg'}xG{:else if sortBy === 'price'}Price{:else}{sortBy}{/if}
 							{sortAsc ? '↑' : '↓'}
 						</button>
 					</div>
@@ -1558,10 +1555,10 @@
 	   RIGHT PANEL
 	   ═══════════════════════════════════════════════════════════ */
 	.panel-card {
-		padding: 14px;
-		border-radius: 12px;
+		padding: 10px 12px;
+		border-radius: 8px;
 		background: var(--color-surface-2);
-		border: 1px solid var(--color-surface-4);
+		border: 1px solid rgba(255,255,255,0.04);
 	}
 
 	.panel-selected-player {
@@ -1655,11 +1652,11 @@
 	}
 
 	.panel-results {
-		border-radius: 12px;
+		border-radius: 8px;
 		background: var(--color-surface-2);
-		border: 1px solid var(--color-surface-4);
+		border: 1px solid rgba(255,255,255,0.04);
 		overflow: hidden;
-		max-height: calc(100vh - 420px);
+		max-height: calc(100vh - 380px);
 		overflow-y: auto;
 	}
 
