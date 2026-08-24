@@ -45,7 +45,7 @@
 	</nav>
 
 	<!-- Main content -->
-	<main class="mx-auto max-w-7xl px-6 lg:px-8 py-10">
+	<main class="mx-auto max-w-7xl px-6 lg:px-8 py-6">
 		{@render children()}
 	</main>
 </div>
