@@ -1038,7 +1038,7 @@
 					<div class="overflow-x-auto">
 						<div class="min-w-[350px]">
 							<div class="grid items-center px-2 py-1.5 text-[7px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)] gap-x-1"
-								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 28px) 40px;">
+								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 30px) 40px;">
 								<span></span>
 								<span>Player</span>
 								<button onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}
@@ -1065,7 +1065,7 @@
 									onclick={() => transferOutPlayer ? completeTransfer(player) : null}
 									disabled={!transferOutPlayer}
 									class="w-full grid items-center px-2 py-1.5 gap-x-1 hover:bg-white/[0.03] transition-colors text-left border-b border-[var(--color-surface-4)]/30 {!transferOutPlayer ? 'opacity-70 cursor-default' : 'cursor-pointer'}"
-									style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 28px) 40px;"
+									style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 30px) 40px;"
 								>
 									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7" />
 									<div class="min-w-0">
