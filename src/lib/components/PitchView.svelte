@@ -207,6 +207,8 @@
 	.pitch-wrapper {
 		position: relative;
 		width: 100%;
+		max-width: 500px;
+		margin: 0 auto;
 	}
 
 	/* ─── Pitch Surface ─── */
@@ -304,8 +306,8 @@
 	}
 
 	.player-shirt {
-		width: 40px;
-		height: 50px;
+		width: 48px;
+		height: 60px;
 		object-fit: contain;
 		filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
 		transition: transform 0.2s ease;
@@ -313,14 +315,14 @@
 
 	@media (min-width: 640px) {
 		.player-shirt {
-			width: 48px;
-			height: 60px;
+			width: 56px;
+			height: 70px;
 		}
 	}
 
 	.player-shirt--bench {
-		width: 34px;
-		height: 42px;
+		width: 40px;
+		height: 50px;
 	}
 
 	@media (min-width: 640px) {

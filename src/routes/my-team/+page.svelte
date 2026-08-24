@@ -36,7 +36,7 @@
 	let searchQuery = $state('');
 	let filterTeam = $state('');
 	let filterPos = $state('');
-	let sortBy: 'twxp' | 'price' | 'form' | 'points' = $state('twxp');
+	let sortBy: 'twxp' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' = $state('twxp');
 
 	// --- Helpers ---
 	function formatPrice(cost: number): string {
@@ -104,17 +104,26 @@
 
 	let baseTWxP = $derived(calculateSquadTWxP(baseSquad));
 
-	// --- Working squad (base + planned transfers + subs) ---
+	// --- Working squad (base + planned transfers, respecting manual ordering for subs) ---
+	let workingSquadRaw = $derived.by(() => {
+		if (currentTransfers.length === 0) return baseSquad;
+		return applyTransfers(baseSquad, baseBank, currentTransfers).squad;
+	});
+
 	let workingSquad = $derived.by(() => {
-		let squad = baseSquad;
-		if (currentTransfers.length > 0) {
-			squad = applyTransfers(baseSquad, baseBank, currentTransfers).squad;
+		if (manualSquadOrder.length === 0) return workingSquadRaw;
+		// Reorder based on manual order (from subs)
+		const byId = new Map(workingSquadRaw.map(p => [p.element_id, p]));
+		const ordered: SquadPlayer[] = [];
+		for (const id of manualSquadOrder) {
+			const p = byId.get(id);
+			if (p) ordered.push(p);
 		}
-		// Apply substitutions
-		for (const [a, b] of squadSubs) {
-			squad = swapPlayers(squad, a, b);
+		// Add any players not in the manual order (new transfers)
+		for (const p of workingSquadRaw) {
+			if (!manualSquadOrder.includes(p.element_id)) ordered.push(p);
 		}
-		return squad;
+		return ordered;
 	});
 
 	let workingBank = $derived.by(() => {
@@ -231,35 +240,47 @@
 		budgetFilterOn = true;  // Default to showing affordable players
 	}
 
-	// Substitution: swap two players within squad (starting ↔ bench)
-	let subMode = $state(false);
-	let subPlayer: SquadPlayer | null = $state(null);
-	let squadSubs: [number, number][] = $state([]);  // pairs of element_ids that were swapped
+	// --- Player interaction: unified click handler ---
+	// Click a player on pitch:
+	//   - If no one selected → select them
+	//   - If same player → deselect
+	//   - If another squad player is already selected → SWAP (substitution)
+	let selectedPlayer: SquadPlayer | null = $state(null);
 
-	function startSub(player: SquadPlayer) {
-		if (subMode && subPlayer) {
-			// Complete the sub — swap positions
-			if (subPlayer.element_id !== player.element_id) {
-				squadSubs = [...squadSubs, [subPlayer.element_id, player.element_id]];
-			}
-			subMode = false;
-			subPlayer = null;
+	function onPitchPlayerClick(player: SquadPlayer) {
+		if (!selectedPlayer) {
+			// Select this player
+			selectedPlayer = player;
+			transferMode = true;
+			transferOutPlayer = player;
+			searchQuery = '';
+			filterTeam = '';
+			filterPos = String(player.element_type);
+			budgetFilterOn = true;
+		} else if (selectedPlayer.element_id === player.element_id) {
+			// Deselect
+			deselectPlayer();
 		} else {
-			subMode = true;
-			subPlayer = player;
-			transferMode = false;
-			transferOutPlayer = null;
+			// Swap the two players (substitution)
+			const idx1 = workingSquadRaw.findIndex(p => p.element_id === selectedPlayer!.element_id);
+			const idx2 = workingSquadRaw.findIndex(p => p.element_id === player.element_id);
+			if (idx1 !== -1 && idx2 !== -1) {
+				const newSquad = [...workingSquadRaw];
+				[newSquad[idx1], newSquad[idx2]] = [newSquad[idx2], newSquad[idx1]];
+				manualSquadOrder = newSquad.map(p => p.element_id);
+			}
+			deselectPlayer();
 		}
 	}
 
-	function cancelSub() {
-		subMode = false;
-		subPlayer = null;
+	function deselectPlayer() {
+		selectedPlayer = null;
+		transferMode = false;
+		transferOutPlayer = null;
 	}
 
-	function undoLastSub() {
-		squadSubs = squadSubs.slice(0, -1);
-	}
+	// Manual squad ordering (for subs) — stores the desired element_id order
+	let manualSquadOrder: number[] = $state([]);
 
 	// --- Transfer search (client-side for instant, accent-insensitive filtering) ---
 	let allPlayers: any[] = $state([]);
@@ -319,6 +340,9 @@
 				if (sortBy === 'price') return b.now_cost - a.now_cost;
 				if (sortBy === 'form') return parseFloat(b.form || '0') - parseFloat(a.form || '0');
 				if (sortBy === 'points') return (b.total_points || 0) - (a.total_points || 0);
+				if (sortBy === 'ep_next') return parseFloat(b.ep_next || '0') - parseFloat(a.ep_next || '0');
+				if (sortBy === 'transfers_in') return (b.transfers_in_event || 0) - (a.transfers_in_event || 0);
+				if (sortBy === 'xg') return parseFloat(b.expected_goals || '0') - parseFloat(a.expected_goals || '0');
 				return 0;
 			})
 			.slice(0, 40);
@@ -348,15 +372,15 @@
 			bcv: inPlayer.bcv,
 		};
 		currentTransfers = [...currentTransfers, { out: transferOutPlayer, in: inSquadPlayer }];
-		transferMode = false;
-		transferOutPlayer = null;
-		searchQuery = '';
+		// Update manual order: replace the outgoing player's id with incoming
+		if (manualSquadOrder.length > 0) {
+			manualSquadOrder = manualSquadOrder.map(id => id === transferOutPlayer!.element_id ? inPlayer.element_id : id);
+		}
+		deselectPlayer();
 	}
 
 	function cancelTransfer() {
-		transferMode = false;
-		transferOutPlayer = null;
-		searchQuery = '';
+		deselectPlayer();
 	}
 
 	function removeCurrentTransfer(idx: number) {
@@ -686,30 +710,14 @@
 							class="view-pill {viewMode === 'list' ? 'view-pill--active' : ''}"
 						>List</button>
 					</div>
-					{#if subMode && subPlayer}
-						<span class="text-[10px] text-[var(--color-warning)]">
-							Swap <strong class="font-semibold">{subPlayer.web_name}</strong> with…
-							<button onclick={cancelSub} class="ml-1.5 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
-						</span>
-					{:else if transferOutPlayer}
+					{#if selectedPlayer}
 						<span class="text-[10px] text-[var(--color-accent-light)]">
-							Replacing <strong class="font-semibold">{transferOutPlayer.web_name}</strong>
-							<button onclick={cancelTransfer} class="ml-1.5 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
+							<strong class="font-semibold">{selectedPlayer.web_name}</strong> selected
+							<span class="text-[var(--color-text-3)] ml-1">· tap squad player to swap, or pick from list to transfer</span>
+							<button onclick={deselectPlayer} class="ml-1.5 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
 						</span>
 					{:else}
-						<div class="flex items-center gap-2">
-							<button onclick={() => { subMode = true; transferMode = false; transferOutPlayer = null; }}
-								class="text-[10px] px-2 py-1 rounded bg-[var(--color-surface-3)] text-[var(--color-text-2)] hover:text-[var(--color-text-0)] hover:bg-[var(--color-surface-4)]">
-								Substitute
-							</button>
-							{#if squadSubs.length > 0}
-								<button onclick={undoLastSub}
-									class="text-[9px] text-[var(--color-text-3)] hover:text-[var(--color-fall)]">
-									Undo sub
-								</button>
-							{/if}
-							<span class="text-[var(--color-text-3)] text-[10px] hidden sm:block">Tap to transfer</span>
-						</div>
+						<span class="text-[var(--color-text-3)] text-[10px] hidden sm:block">Tap a player to select</span>
 					{/if}
 				</div>
 
@@ -717,8 +725,8 @@
 					<PitchView
 						starting={starting11}
 						{bench}
-						onPlayerClick={(player) => subMode ? startSub(player) : startTransferOut(player)}
-						selectedId={transferOutPlayer?.element_id}
+						onPlayerClick={onPitchPlayerClick}
+						selectedId={selectedPlayer?.element_id}
 					/>
 				{:else}
 					<!-- LIST VIEW -->
@@ -863,20 +871,23 @@
 							</select>
 							<select bind:value={sortBy}
 								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
-								<option value="twxp">xPts ↓</option>
-								<option value="price">Price ↓</option>
-								<option value="form">Form ↓</option>
-								<option value="points">Pts ↓</option>
+								<option value="twxp">xPts (8wk)</option>
+								<option value="ep_next">xPts next</option>
+								<option value="price">Price</option>
+								<option value="form">Form</option>
+								<option value="points">Total Pts</option>
+								<option value="transfers_in">Transfers In</option>
+								<option value="xg">xG</option>
 							</select>
 						</div>
 					</div>
 
-					<!-- Column headers -->
+					<!-- Column headers (clickable to sort) -->
 					<div class="flex items-center px-3 py-1 text-[8px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)]">
 						<span class="w-7"></span>
 						<span class="flex-1">Player</span>
-						<span class="w-12 text-right">Price</span>
-						<span class="w-12 text-right">xPts</span>
+						<button onclick={() => sortBy = 'price'} class="w-12 text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">Price</button>
+						<button onclick={() => sortBy = 'twxp'} class="w-14 text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'twxp' || sortBy === 'ep_next' ? 'text-[var(--color-accent-light)]' : ''}">{sortBy === 'ep_next' ? 'xP Next' : 'xPts'}</button>
 					</div>
 
 					<!-- Player list -->
@@ -896,8 +907,17 @@
 									<div class="w-12 text-right">
 										<div class="font-mono text-[10px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
 									</div>
-									<div class="w-12 text-right">
-										<div class="font-mono text-[10px] text-[var(--color-accent-light)]">{calculatePlayerTWxP(player.projections || []).toFixed(1)}</div>
+									<div class="w-14 text-right">
+										<div class="font-mono text-[10px] text-[var(--color-accent-light)]">
+											{#if sortBy === 'price'}{formatPrice(player.now_cost)}
+											{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
+											{:else if sortBy === 'form'}{player.form || '-'}
+											{:else if sortBy === 'points'}{player.total_points || 0}
+											{:else if sortBy === 'transfers_in'}{(player.transfers_in_event || 0).toLocaleString()}
+											{:else if sortBy === 'xg'}{player.expected_goals || '-'}
+											{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+											{/if}
+										</div>
 									</div>
 								</button>
 							{/each}
