@@ -6,7 +6,6 @@
 		DECAY, BCV_THRESHOLD, type SquadPlayer, type TransferOption
 	} from '$lib/transfer-engine';
 	import PitchView from '$lib/components/PitchView.svelte';
-	import TransferModal from '$lib/components/TransferModal.svelte';
 
 	// --- View mode ---
 	let viewMode: 'pitch' | 'list' = $state('pitch');
@@ -619,48 +618,43 @@
 		{/if}
 
 		<!-- ═══════════════════════════════════════════════════════════════
-		     TRANSFER MODAL
+		     MAIN LAYOUT: Pitch/List (left) + Player Panel (right)
 		     ═══════════════════════════════════════════════════════════════ -->
-		{#if transferMode && transferOutPlayer}
-			<TransferModal
-				outPlayer={transferOutPlayer}
-				budget={workingBank + transferOutPlayer.selling_price}
-				{allPlayers}
-				{allPlayersLoaded}
-				onSelect={completeTransfer}
-				onCancel={cancelTransfer}
-			/>
-		{/if}
+		<div class="flex gap-5">
+			<!-- LEFT: Squad view -->
+			<div class="flex-1 min-w-0">
+				<!-- View toggle -->
+				<div class="flex items-center justify-between mb-3">
+					<div class="flex items-center gap-0.5 bg-[var(--color-surface-3)] rounded-lg p-0.5">
+						<button
+							onclick={() => viewMode = 'pitch'}
+							class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+								{viewMode === 'pitch' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-2)] hover:text-[var(--color-text-0)]'}"
+						>Pitch</button>
+						<button
+							onclick={() => viewMode = 'list'}
+							class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+								{viewMode === 'list' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-2)] hover:text-[var(--color-text-0)]'}"
+						>List</button>
+					</div>
+					{#if transferOutPlayer}
+						<span class="text-xs text-[var(--color-accent)]">
+							Replacing: <strong>{transferOutPlayer.web_name}</strong>
+							<button onclick={cancelTransfer} class="ml-2 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
+						</span>
+					{:else}
+						<span class="text-[var(--color-text-3)] text-xs hidden sm:block">Tap a player to transfer out</span>
+					{/if}
+				</div>
 
-		<!-- ═══════════════════════════════════════════════════════════════
-		     VIEW TOGGLE + SQUAD
-		     ═══════════════════════════════════════════════════════════════ -->
-		<div class="flex items-center justify-between mb-4">
-			<div class="flex items-center gap-1 bg-[var(--color-surface-3)] rounded-lg p-0.5">
-				<button
-					onclick={() => viewMode = 'pitch'}
-					class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
-						{viewMode === 'pitch' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-2)] hover:text-[var(--color-text-0)]'}"
-				>Pitch</button>
-				<button
-					onclick={() => viewMode = 'list'}
-					class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
-						{viewMode === 'list' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-2)] hover:text-[var(--color-text-0)]'}"
-				>List</button>
-			</div>
-			{#if !transferMode}
-				<p class="text-[var(--color-text-3)] text-xs">Tap a player to transfer out</p>
-			{/if}
-		</div>
-
-		{#if viewMode === 'pitch'}
-			<PitchView
-				starting={starting11}
-				bench={bench}
-				onTransferOut={startTransferOut}
-				{transferMode}
-			/>
-		{:else}
+				{#if viewMode === 'pitch'}
+					<PitchView
+						starting={starting11}
+						{bench}
+						onPlayerClick={startTransferOut}
+						selectedId={transferOutPlayer?.element_id}
+					/>
+				{:else}
 		<!-- LIST VIEW -->
 		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
 					<div class="grid grid-cols-[2.5fr_auto_auto_auto_repeat(var(--gw-cols,5),minmax(0,1fr))_auto_auto] gap-x-2 px-5 py-3 text-[10px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)] items-center"
@@ -787,6 +781,59 @@
 					</div>
 		</section>
 		{/if}
+			</div>
+
+			<!-- RIGHT: Player search panel (always visible) -->
+			<aside class="hidden lg:block w-72 flex-shrink-0">
+				<div class="sticky top-20 space-y-3">
+					<div class="rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-surface-4)] p-3">
+						<input
+							type="text"
+							placeholder="Search players…"
+							bind:value={searchQuery}
+							class="w-full px-3 py-2 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] text-sm"
+						/>
+						{#if transferOutPlayer}
+							<div class="mt-2 text-xs text-[var(--color-text-2)]">
+								Budget: <span class="font-mono text-[var(--color-text-0)]">{formatPrice(workingBank + transferOutPlayer.selling_price)}</span>
+							</div>
+						{/if}
+					</div>
+
+					<!-- Results -->
+					<div class="rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-surface-4)] overflow-hidden max-h-[calc(100vh-12rem)] overflow-y-auto">
+						{#if searchResults.length > 0}
+							{#each searchResults as player}
+								<button
+									onclick={() => completeTransfer(player)}
+									disabled={!transferOutPlayer}
+									class="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-surface-3)] transition-colors text-left border-b border-[var(--color-surface-4)]/50 last:border-0 disabled:opacity-40 disabled:cursor-not-allowed"
+								>
+									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-6 h-8 flex-shrink-0" />
+									<div class="flex-1 min-w-0">
+										<div class="text-xs font-medium truncate">{player.web_name}</div>
+										<div class="text-[10px] text-[var(--color-text-3)]">{player.team_short} · {POSITIONS[player.element_type]} · {formatPrice(player.now_cost)}</div>
+									</div>
+									<div class="text-right flex-shrink-0">
+										<div class="font-mono text-[10px] text-[var(--color-accent-light)]">{calculatePlayerTWxP(player.projections || []).toFixed(1)}</div>
+									</div>
+								</button>
+							{/each}
+						{:else if searchQuery.length >= 2 && allPlayersLoaded}
+							<div class="p-4 text-center text-[var(--color-text-2)] text-xs">
+								{transferOutPlayer ? 'No players within budget' : 'Select a player first'}
+							</div>
+						{:else if searchQuery.length < 2}
+							<div class="p-4 text-center text-[var(--color-text-3)] text-xs">
+								{transferOutPlayer ? 'Type to search replacements' : 'Tap a player on the pitch, then search here'}
+							</div>
+						{:else if !allPlayersLoaded}
+							<div class="p-4 text-center text-[var(--color-text-2)] text-xs">Loading…</div>
+						{/if}
+					</div>
+				</div>
+			</aside>
+		</div>
 
 		<!-- ═══════════════════════════════════════════════════════════════
 		     COMPARISON VIEW
