@@ -236,14 +236,19 @@
 					{#if isExpanded}
 						<tr class="bg-[var(--color-surface-3)]/30">
 							<td colspan="7" class="px-5 py-4">
-								<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+								<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
 									{#if data.csvLookup?.[row.element_id]}
 										{@const remainingGws = getRemainingGws(row.element_id)}
+										{@const gwPts = remainingGws.map(g => g.pts)}
+										{@const gwMax = Math.max(...gwPts, 1)}
+										{@const gwMin = Math.min(...gwPts, 0)}
 										{#each remainingGws as gw, i}
-											<div class="text-center p-2.5 rounded-lg bg-[var(--color-surface-2)]">
-												<div class="text-[var(--color-text-2)] text-xs mb-1">GW{gw.gw}</div>
-												<div class="font-mono font-semibold">{gw.pts.toFixed(1)}</div>
-												<div class="text-[var(--color-text-3)] text-xs mt-0.5">×{gw.weight.toFixed(2)}</div>
+											{@const range = gwMax - gwMin || 1}
+											{@const ratio = (gw.pts - gwMin) / range}
+											<div class="text-center p-2 rounded-lg"
+												style="background: {ratio > 0.7 ? `rgba(22, 163, 74, ${0.15 + ratio * 0.25})` : ratio > 0.3 ? `rgba(202, 138, 4, ${0.08 + ratio * 0.1})` : `rgba(255, 255, 255, 0.03)`}">
+												<div class="text-[var(--color-text-2)] text-[10px] mb-0.5">GW{gw.gw}</div>
+												<div class="font-mono font-semibold text-sm">{gw.pts.toFixed(1)}</div>
 											</div>
 										{/each}
 										{#if remainingGws.length === 0}
