@@ -711,10 +711,7 @@
 		<!-- ═══════════════════════════════════════════════════════════════
 		     MAIN SPLIT LAYOUT: Pitch (left) + Panel (right)
 		     ═══════════════════════════════════════════════════════════════ -->
-		<div class="main-split">
-			<!-- LEFT: Pitch / List -->
-			<div class="main-left">
-				<!-- View toggle bar -->
+		<!-- View toggle (above split for alignment) -->
 				<div class="view-toggle-bar">
 					<div class="view-toggle-pills">
 						<button
@@ -734,6 +731,8 @@
 					{/if}
 				</div>
 
+		<div class="main-split">
+			<div class="main-left">
 				{#if viewMode === 'pitch'}
 					<PitchView
 						starting={starting11}
