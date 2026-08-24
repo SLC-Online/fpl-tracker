@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { teamBadgeUrl, POSITIONS } from '$lib/types';
 	import {
-		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers,
+		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers, swapPlayers,
 		transferPointsCost, isTransferWorthIt,
 		DECAY, BCV_THRESHOLD, type SquadPlayer, type TransferOption
 	} from '$lib/transfer-engine';
@@ -104,10 +104,16 @@
 
 	let baseTWxP = $derived(calculateSquadTWxP(baseSquad));
 
-	// --- Working squad (base + planned current transfers) ---
+	// --- Working squad (base + planned transfers + subs) ---
 	let workingSquad = $derived.by(() => {
-		if (currentTransfers.length === 0) return baseSquad;
-		const { squad } = applyTransfers(baseSquad, baseBank, currentTransfers);
+		let squad = baseSquad;
+		if (currentTransfers.length > 0) {
+			squad = applyTransfers(baseSquad, baseBank, currentTransfers).squad;
+		}
+		// Apply substitutions
+		for (const [a, b] of squadSubs) {
+			squad = swapPlayers(squad, a, b);
+		}
 		return squad;
 	});
 
@@ -228,15 +234,13 @@
 	// Substitution: swap two players within squad (starting ↔ bench)
 	let subMode = $state(false);
 	let subPlayer: SquadPlayer | null = $state(null);
+	let squadSubs: [number, number][] = $state([]);  // pairs of element_ids that were swapped
 
 	function startSub(player: SquadPlayer) {
 		if (subMode && subPlayer) {
-			// Complete the sub - swap positions
-			// (For now this just visually swaps them in the working squad)
-			const idx1 = workingSquad.findIndex(p => p.element_id === subPlayer!.element_id);
-			const idx2 = workingSquad.findIndex(p => p.element_id === player.element_id);
-			if (idx1 !== -1 && idx2 !== -1) {
-				// TODO: implement proper position swap in the squad state
+			// Complete the sub — swap positions
+			if (subPlayer.element_id !== player.element_id) {
+				squadSubs = [...squadSubs, [subPlayer.element_id, player.element_id]];
 			}
 			subMode = false;
 			subPlayer = null;
@@ -251,6 +255,10 @@
 	function cancelSub() {
 		subMode = false;
 		subPlayer = null;
+	}
+
+	function undoLastSub() {
+		squadSubs = squadSubs.slice(0, -1);
 	}
 
 	// --- Transfer search (client-side for instant, accent-insensitive filtering) ---
@@ -678,13 +686,30 @@
 							class="view-pill {viewMode === 'list' ? 'view-pill--active' : ''}"
 						>List</button>
 					</div>
-					{#if transferOutPlayer}
+					{#if subMode && subPlayer}
+						<span class="text-[10px] text-[var(--color-warning)]">
+							Swap <strong class="font-semibold">{subPlayer.web_name}</strong> with…
+							<button onclick={cancelSub} class="ml-1.5 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
+						</span>
+					{:else if transferOutPlayer}
 						<span class="text-[10px] text-[var(--color-accent-light)]">
 							Replacing <strong class="font-semibold">{transferOutPlayer.web_name}</strong>
 							<button onclick={cancelTransfer} class="ml-1.5 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
 						</span>
 					{:else}
-						<span class="text-[var(--color-text-3)] text-[10px] hidden sm:block">Tap a player to start a transfer</span>
+						<div class="flex items-center gap-2">
+							<button onclick={() => { subMode = true; transferMode = false; transferOutPlayer = null; }}
+								class="text-[10px] px-2 py-1 rounded bg-[var(--color-surface-3)] text-[var(--color-text-2)] hover:text-[var(--color-text-0)] hover:bg-[var(--color-surface-4)]">
+								Substitute
+							</button>
+							{#if squadSubs.length > 0}
+								<button onclick={undoLastSub}
+									class="text-[9px] text-[var(--color-text-3)] hover:text-[var(--color-fall)]">
+									Undo sub
+								</button>
+							{/if}
+							<span class="text-[var(--color-text-3)] text-[10px] hidden sm:block">Tap to transfer</span>
+						</div>
 					{/if}
 				</div>
 
@@ -692,7 +717,7 @@
 					<PitchView
 						starting={starting11}
 						{bench}
-						onPlayerClick={startTransferOut}
+						onPlayerClick={(player) => subMode ? startSub(player) : startTransferOut(player)}
 						selectedId={transferOutPlayer?.element_id}
 					/>
 				{:else}

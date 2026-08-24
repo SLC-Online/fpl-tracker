@@ -113,18 +113,44 @@ export function applyTransfers(
 	let bank = baseBank;
 
 	for (const t of transfers) {
-		// Remove outgoing player, add incoming
-		squad = squad.filter(p => p.element_id !== t.out.element_id);
+		// Find the outgoing player's index and replace them in-place
+		const idx = squad.findIndex(p => p.element_id === t.out.element_id);
 		bank += t.out.selling_price;
 		bank -= t.in.current_price;
-		squad.push({
+
+		const inPlayer: SquadPlayer = {
 			...t.in,
 			purchase_price: t.in.current_price,
-			selling_price: t.in.current_price,  // Just bought, selling price = purchase price
-		});
+			selling_price: t.in.current_price,
+		};
+
+		if (idx !== -1) {
+			// Replace at same position (preserves starting XI / bench slot)
+			squad[idx] = inPlayer;
+		} else {
+			// Fallback: player not found (shouldn't happen), append
+			squad.push(inPlayer);
+		}
 	}
 
 	return { squad, bank };
+}
+
+/**
+ * Swap two players in a squad (substitution: starting XI ↔ bench).
+ */
+export function swapPlayers(
+	squad: SquadPlayer[],
+	playerA: number,
+	playerB: number
+): SquadPlayer[] {
+	const result = [...squad];
+	const idxA = result.findIndex(p => p.element_id === playerA);
+	const idxB = result.findIndex(p => p.element_id === playerB);
+	if (idxA !== -1 && idxB !== -1) {
+		[result[idxA], result[idxB]] = [result[idxB], result[idxA]];
+	}
+	return result;
 }
 
 /**
