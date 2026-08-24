@@ -37,6 +37,7 @@
 	let filterTeam = $state('');
 	let filterPos = $state('');
 	let sortBy: 'twxp' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' = $state('twxp');
+	let sortAsc = $state(false);
 
 	// --- Helpers ---
 	function formatPrice(cost: number): string {
@@ -350,14 +351,15 @@
 				return true;
 			})
 			.sort((a, b) => {
-				if (sortBy === 'twxp') return calculatePlayerTWxP(b.projections || []) - calculatePlayerTWxP(a.projections || []);
-				if (sortBy === 'price') return b.now_cost - a.now_cost;
-				if (sortBy === 'form') return parseFloat(b.form || '0') - parseFloat(a.form || '0');
-				if (sortBy === 'points') return (b.total_points || 0) - (a.total_points || 0);
-				if (sortBy === 'ep_next') return parseFloat(b.ep_next || '0') - parseFloat(a.ep_next || '0');
-				if (sortBy === 'transfers_in') return (b.transfers_in_event || 0) - (a.transfers_in_event || 0);
-				if (sortBy === 'xg') return parseFloat(b.expected_goals || '0') - parseFloat(a.expected_goals || '0');
-				return 0;
+				let diff = 0;
+				if (sortBy === 'twxp') diff = calculatePlayerTWxP(b.projections || []) - calculatePlayerTWxP(a.projections || []);
+				else if (sortBy === 'price') diff = b.now_cost - a.now_cost;
+				else if (sortBy === 'form') diff = parseFloat(b.form || '0') - parseFloat(a.form || '0');
+				else if (sortBy === 'points') diff = (b.total_points || 0) - (a.total_points || 0);
+				else if (sortBy === 'ep_next') diff = parseFloat(b.ep_next || '0') - parseFloat(a.ep_next || '0');
+				else if (sortBy === 'transfers_in') diff = (b.transfers_in_event || 0) - (a.transfers_in_event || 0);
+				else if (sortBy === 'xg') diff = parseFloat(b.expected_goals || '0') - parseFloat(a.expected_goals || '0');
+				return sortAsc ? -diff : diff;
 			})
 			.slice(0, 40);
 	});
@@ -880,7 +882,7 @@
 									<option value={team}>{team}</option>
 								{/each}
 							</select>
-							<select bind:value={sortBy}
+							<select bind:value={sortBy} onchange={() => sortAsc = false}
 								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
 								<option value="twxp">xPts (8wk)</option>
 								<option value="ep_next">xPts next</option>
@@ -893,20 +895,18 @@
 						</div>
 					</div>
 
-					<!-- Column headers (clickable to sort) -->
-					<div class="flex items-center px-3 py-1 text-[8px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)]">
+					<!-- Column headers (clickable to toggle sort direction) -->
+					<div class="flex items-center px-3 py-1.5 text-[8px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)]">
 						<span class="w-7"></span>
 						<span class="flex-1">Player</span>
-						<button onclick={() => sortBy = 'price'} class="w-12 text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">Price</button>
-						<button onclick={() => sortBy = sortBy === 'twxp' ? 'ep_next' : 'twxp'} class="w-14 text-right cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
-							{#if sortBy === 'twxp'}xPts
-							{:else if sortBy === 'ep_next'}xP Next
-							{:else if sortBy === 'form'}Form
-							{:else if sortBy === 'points'}Pts
-							{:else if sortBy === 'transfers_in'}TI
-							{:else if sortBy === 'xg'}xG
-							{:else}{sortBy}
-							{/if}
+						<button onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; } }}
+							class="w-12 text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">
+							Price {sortBy === 'price' ? (sortAsc ? '↑' : '↓') : ''}
+						</button>
+						<button onclick={() => { sortAsc = !sortAsc; }}
+							class="w-14 text-right cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
+							{#if sortBy === 'twxp'}xPts{:else if sortBy === 'ep_next'}xP Nxt{:else if sortBy === 'form'}Form{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TI{:else if sortBy === 'xg'}xG{:else}{sortBy}{/if}
+							{sortAsc ? '↑' : '↓'}
 						</button>
 					</div>
 

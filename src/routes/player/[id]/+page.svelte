@@ -17,54 +17,61 @@
 
 		const timestamps = data.timeline.map((s: any) => new Date(s.snapshots.timestamp).getTime());
 		const prices = data.timeline.map((s: any) => s.now_cost / 10);
+		const ownership = data.timeline.map((s: any) => parseFloat(s.selected_by_percent || 0));
 
 		const options = {
 			chart: {
-				type: 'area',
-				height: 240,
+				type: 'line',
+				height: 280,
 				background: 'transparent',
-				foreColor: '#64748b',
-				toolbar: { show: false },
-				zoom: { enabled: false },
+				foreColor: '#94a3b8',
+				toolbar: { show: true, tools: { download: false, pan: false, reset: true, zoom: true, zoomin: false, zoomout: false } },
+				zoom: { enabled: true },
 				fontFamily: 'Sohne, system-ui, sans-serif',
-				sparkline: { enabled: false },
 			},
 			theme: { mode: 'dark' as const },
 			series: [
-				{ name: 'Price', data: prices },
+				{ name: 'Price (£m)', data: prices },
+				{ name: 'Ownership (%)', data: ownership },
 			],
 			xaxis: {
 				type: 'datetime' as const,
 				categories: timestamps,
-				labels: { style: { fontFamily: 'Sohne Mono', fontSize: '10px' } },
+				labels: { style: { fontFamily: 'Sohne Mono', fontSize: '9px' }, datetimeFormatter: { hour: 'HH:mm', day: 'dd MMM' } },
 				axisBorder: { show: false },
-				axisTicks: { show: false },
 			},
-			yaxis: {
-				labels: { 
-					formatter: (val: number) => `£${val.toFixed(1)}`,
-					style: { fontFamily: 'Sohne Mono', fontSize: '10px' },
+			yaxis: [
+				{
+					title: { text: 'Price (£m)', style: { fontFamily: 'Sohne', fontSize: '10px', color: '#6366f1' } },
+					labels: { formatter: (val: number) => `£${val.toFixed(1)}`, style: { fontFamily: 'Sohne Mono', fontSize: '9px', colors: ['#6366f1'] } },
+					decimalsInFloat: 1,
 				},
-			},
-			stroke: { width: 2, curve: 'smooth' as const },
-			fill: {
-				type: 'gradient',
-				gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0, stops: [0, 100] },
-			},
-			colors: ['#6366f1'],
-			grid: { borderColor: '#1a2440', strokeDashArray: 4, padding: { left: 10, right: 10 } },
+				{
+					opposite: true,
+					title: { text: 'Ownership (%)', style: { fontFamily: 'Sohne', fontSize: '10px', color: '#f59e0b' } },
+					labels: { formatter: (val: number) => `${val.toFixed(1)}%`, style: { fontFamily: 'Sohne Mono', fontSize: '9px', colors: ['#f59e0b'] } },
+					decimalsInFloat: 1,
+				},
+			],
+			stroke: { width: [2.5, 1.5], curve: 'smooth' as const },
+			colors: ['#6366f1', '#f59e0b'],
+			grid: { borderColor: '#1a2440', strokeDashArray: 4 },
+			legend: { fontFamily: 'Sohne', fontSize: '11px', labels: { colors: ['#6366f1', '#f59e0b'] } },
 			tooltip: {
 				theme: 'dark',
 				style: { fontFamily: 'Sohne' },
-				y: { formatter: (val: number) => `£${val.toFixed(1)}` },
+				y: [
+					{ formatter: (val: number) => `£${val.toFixed(1)}m` },
+					{ formatter: (val: number) => `${val.toFixed(1)}%` },
+				],
 			},
 			annotations: {
 				xaxis: data.priceChanges.map((pc: any) => ({
 					x: new Date(pc.detected_at).getTime(),
 					borderColor: pc.change > 0 ? '#10b981' : '#ef4444',
 					label: {
-						text: `${pc.change > 0 ? '↑' : '↓'}${formatPrice(pc.new_cost)}`,
-						style: { color: '#fff', background: pc.change > 0 ? '#10b981' : '#ef4444', fontFamily: 'Sohne Mono', fontSize: '10px', padding: { left: 4, right: 4, top: 2, bottom: 2 } }
+						text: `${pc.change > 0 ? '↑' : '↓'} ${formatPrice(pc.new_cost)}`,
+						style: { color: '#fff', background: pc.change > 0 ? '#10b981' : '#ef4444', fontFamily: 'Sohne Mono', fontSize: '9px', padding: { left: 4, right: 4, top: 2, bottom: 2 } }
 					}
 				}))
 			}
@@ -186,14 +193,12 @@
 	{/if}
 
 	<!-- Chart -->
-	<!-- Price Chart (only shown if there have been price changes) -->
-	{#if data.priceChanges.length > 0 && data.timeline.length >= 2}
+	<!-- Price & Ownership Chart -->
+	{#if data.timeline.length >= 2}
 		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
-			<h2 class="font-display font-semibold text-lg mb-4">Price History</h2>
+			<h2 class="font-display font-semibold text-lg mb-4">Price & Ownership</h2>
 			<div bind:this={chartContainer}></div>
 		</section>
-	{:else if data.timeline.length >= 2}
-		<!-- No price changes yet, don't show a flat useless line -->
 	{:else}
 		<div class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-10 text-center">
 			<p class="text-[var(--color-text-2)]">Collecting data — charts appear after more snapshots.</p>
