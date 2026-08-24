@@ -1,0 +1,111 @@
+import { json } from '@sveltejs/kit';
+import { supabaseAdmin } from '$lib/supabase-server';
+import type { RequestHandler } from './$types';
+
+/**
+ * Search players for the transfer picker.
+ * GET /api/players?q=salah&pos=3&max_price=130
+ */
+export const GET: RequestHandler = async ({ url }) => {
+	const search = url.searchParams.get('q') || '';
+	const position = url.searchParams.get('pos') || '';
+	const maxPrice = parseInt(url.searchParams.get('max_price') || '0');
+	const excludeIds = (url.searchParams.get('exclude') || '').split(',').filter(Boolean).map(Number);
+
+	// Get latest snapshot
+	const { data: latestSnap } = await supabaseAdmin
+		.from('snapshots')
+		.select('snapshot_id')
+		.order('snapshot_id', { ascending: false })
+		.limit(1)
+		.single();
+
+	if (!latestSnap) return json([]);
+
+	// Query players with current prices
+	let query = supabaseAdmin
+		.from('player_snapshots')
+		.select(`
+			element_id, now_cost, form, total_points, points_per_game,
+			selected_by_percent, ep_next, status, news,
+			players!inner(web_name, first_name, second_name, code, element_type, team_id,
+				teams!inner(short_name, code, name))
+		`)
+		.eq('snapshot_id', latestSnap.snapshot_id);
+
+	if (maxPrice > 0) {
+		query = query.lte('now_cost', maxPrice);
+	}
+
+	if (search) {
+		query = query.ilike('players.web_name', `%${search}%`);
+	}
+
+	if (position) {
+		query = query.eq('players.element_type', parseInt(position));
+	}
+
+	const { data: players } = await query.order('total_points', { ascending: false }).limit(50);
+
+	if (!players) return json([]);
+
+	// Get projections for these players
+	const elementIds = players.map((p: any) => p.element_id);
+
+	const { data: projections } = await supabaseAdmin
+		.from('projection_inputs')
+		.select('element_id, gameweek, expected_points')
+		.in('element_id', elementIds)
+		.order('gameweek');
+
+	const projMap = new Map<number, { gw: number; pts: number }[]>();
+	for (const proj of projections || []) {
+		if (!projMap.has(proj.element_id)) projMap.set(proj.element_id, []);
+		projMap.get(proj.element_id)!.push({ gw: proj.gameweek, pts: proj.expected_points });
+	}
+
+	// Also get meta (BCV) from projection_inputs
+	const { data: metaData } = await supabaseAdmin
+		.from('projection_inputs')
+		.select('element_id, meta')
+		.in('element_id', elementIds)
+		.order('gameweek', { ascending: false });
+
+	const bcvMap = new Map<number, number>();
+	for (const m of metaData || []) {
+		if (!bcvMap.has(m.element_id) && m.meta?.bcv != null) {
+			bcvMap.set(m.element_id, m.meta.bcv);
+		}
+	}
+
+	const result = players
+		.filter((p: any) => !excludeIds.includes(p.element_id))
+		.map((p: any) => {
+			const player = Array.isArray(p.players) ? p.players[0] : p.players;
+			const team = player?.teams ? (Array.isArray(player.teams) ? player.teams[0] : player.teams) : {};
+			return {
+				element_id: p.element_id,
+				web_name: player.web_name,
+				first_name: player.first_name,
+				second_name: player.second_name,
+				code: player.code,
+				element_type: player.element_type,
+				team_id: player.team_id,
+				team_short: team.short_name,
+				team_code: team.code,
+				team_name: team.name,
+				now_cost: p.now_cost,
+				form: p.form,
+				total_points: p.total_points,
+				points_per_game: p.points_per_game,
+				selected_by_percent: p.selected_by_percent,
+				ep_next: p.ep_next,
+				status: p.status,
+				news: p.news,
+				projections: projMap.get(p.element_id) || [],
+				bcv: bcvMap.get(p.element_id) ?? null,
+			};
+		});
+
+	return json(result);
+};
