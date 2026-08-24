@@ -5,6 +5,11 @@
 		transferPointsCost, isTransferWorthIt,
 		DECAY, BCV_THRESHOLD, type SquadPlayer, type TransferOption
 	} from '$lib/transfer-engine';
+	import PitchView from '$lib/components/PitchView.svelte';
+	import TransferModal from '$lib/components/TransferModal.svelte';
+
+	// --- View mode ---
+	let viewMode: 'pitch' | 'list' = $state('pitch');
 
 	// --- Squad loader state ---
 	let managerId = $state('');
@@ -614,100 +619,50 @@
 		{/if}
 
 		<!-- ═══════════════════════════════════════════════════════════════
-		     TRANSFER SEARCH PANEL (fixed right sidebar on desktop, inline on mobile)
+		     TRANSFER MODAL
 		     ═══════════════════════════════════════════════════════════════ -->
 		{#if transferMode && transferOutPlayer}
-			<!-- Desktop: fixed right panel -->
-			<aside class="fixed right-0 top-16 bottom-0 w-80 bg-[var(--color-surface-1)] border-l border-[var(--color-surface-4)] p-4 overflow-y-auto z-40 hidden lg:block shadow-2xl shadow-black/50">
-				<div class="flex items-center justify-between mb-3">
-					<div>
-						<h3 class="font-display font-semibold text-sm">
-							Replace <span class="text-[var(--color-fall)]">{transferOutPlayer.web_name}</span>
-						</h3>
-						<p class="text-[var(--color-text-2)] text-xs mt-1">
-							Budget: <span class="font-mono">{formatPrice(workingBank + transferOutPlayer.selling_price)}</span>
-						</p>
-					</div>
-					<button onclick={cancelTransfer} class="text-[var(--color-text-2)] hover:text-[var(--color-fall)] p-1.5 rounded-lg hover:bg-[var(--color-surface-3)]">
-						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-					</button>
-				</div>
-				<input
-					type="text"
-					placeholder="Search player…"
-					bind:value={searchQuery}
-					class="w-full px-3 py-2.5 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] text-sm mb-3"
-				/>
-				{#if searchResults.length > 0}
-					<div class="space-y-0.5">
-						{#each searchResults as player}
-							<button
-								onclick={() => completeTransfer(player)}
-								class="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-left"
-							>
-								<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4 flex-shrink-0" />
-								<div class="flex-1 min-w-0">
-									<div class="font-medium text-xs truncate">{player.web_name}</div>
-									<div class="text-[var(--color-text-3)] text-[10px]">{player.team_short} · {POSITIONS[player.element_type]} · {formatPrice(player.now_cost)}</div>
-								</div>
-								<span class="font-mono text-xs text-[var(--color-accent-light)] font-semibold flex-shrink-0">
-									{calculatePlayerTWxP(player.projections || []).toFixed(1)}
-								</span>
-							</button>
-						{/each}
-					</div>
-				{:else if searchQuery.length >= 2 && allPlayersLoaded}
-					<p class="text-[var(--color-text-2)] text-xs py-3 text-center">No players found within budget.</p>
-				{:else if !allPlayersLoaded}
-					<p class="text-[var(--color-text-2)] text-xs py-3 text-center">Loading players…</p>
-				{:else}
-					<p class="text-[var(--color-text-3)] text-xs py-3 text-center">Type to search…</p>
-				{/if}
-			</aside>
-
-			<!-- Mobile: inline panel -->
-			<section class="lg:hidden rounded-2xl bg-[var(--color-surface-2)] card-glow p-4 border border-[var(--color-accent)]/30">
-				<div class="flex items-center justify-between mb-3">
-					<h3 class="font-semibold text-sm">
-						Replace <span class="text-[var(--color-fall)]">{transferOutPlayer.web_name}</span>
-						<span class="text-[var(--color-text-2)] font-normal text-xs ml-1">({formatPrice(workingBank + transferOutPlayer.selling_price)})</span>
-					</h3>
-					<button onclick={cancelTransfer} class="text-[var(--color-text-2)] hover:text-[var(--color-fall)] text-xs">Cancel</button>
-				</div>
-				<input
-					type="text"
-					placeholder="Search player…"
-					bind:value={searchQuery}
-					class="w-full px-3 py-2.5 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] text-sm mb-2"
-				/>
-				{#if searchResults.length > 0}
-					<div class="max-h-48 overflow-y-auto space-y-0.5">
-						{#each searchResults.slice(0, 15) as player}
-							<button
-								onclick={() => completeTransfer(player)}
-								class="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-left"
-							>
-								<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4" />
-								<span class="font-medium text-xs flex-1 truncate">{player.web_name}</span>
-								<span class="text-[var(--color-text-3)] text-[10px]">{player.team_short}</span>
-								<span class="font-mono text-xs">{formatPrice(player.now_cost)}</span>
-								<span class="font-mono text-xs text-[var(--color-accent-light)]">{calculatePlayerTWxP(player.projections || []).toFixed(1)}</span>
-							</button>
-						{/each}
-					</div>
-				{:else if searchQuery.length >= 2 && allPlayersLoaded}
-					<p class="text-[var(--color-text-2)] text-xs py-2 text-center">No results.</p>
-				{/if}
-			</section>
+			<TransferModal
+				outPlayer={transferOutPlayer}
+				budget={workingBank + transferOutPlayer.selling_price}
+				{allPlayers}
+				{allPlayersLoaded}
+				onSelect={completeTransfer}
+				onCancel={cancelTransfer}
+			/>
 		{/if}
 
 		<!-- ═══════════════════════════════════════════════════════════════
-		     SQUAD VIEW
+		     VIEW TOGGLE + SQUAD
 		     ═══════════════════════════════════════════════════════════════ -->
+		<div class="flex items-center justify-between mb-4">
+			<div class="flex items-center gap-1 bg-[var(--color-surface-3)] rounded-lg p-0.5">
+				<button
+					onclick={() => viewMode = 'pitch'}
+					class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+						{viewMode === 'pitch' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-2)] hover:text-[var(--color-text-0)]'}"
+				>Pitch</button>
+				<button
+					onclick={() => viewMode = 'list'}
+					class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+						{viewMode === 'list' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-2)] hover:text-[var(--color-text-0)]'}"
+				>List</button>
+			</div>
+			{#if !transferMode}
+				<p class="text-[var(--color-text-3)] text-xs">Tap a player to transfer out</p>
+			{/if}
+		</div>
+
+		{#if viewMode === 'pitch'}
+			<PitchView
+				starting={starting11}
+				bench={bench}
+				onTransferOut={startTransferOut}
+				{transferMode}
+			/>
+		{:else}
+		<!-- LIST VIEW -->
 		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
-			<!-- Header row -->
-			<div class="overflow-x-auto">
-				<div class="min-w-[700px]">
 					<div class="grid grid-cols-[2.5fr_auto_auto_auto_repeat(var(--gw-cols,5),minmax(0,1fr))_auto_auto] gap-x-2 px-5 py-3 text-[10px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)] items-center"
 						style="--gw-cols: {gwColumns.length}; grid-template-columns: 2.5fr 52px 60px 60px repeat({gwColumns.length}, minmax(40px,1fr)) 56px 36px;">
 						<span>Player</span>
@@ -830,9 +785,8 @@
 							</div>
 						{/each}
 					</div>
-				</div>
-			</div>
 		</section>
+		{/if}
 
 		<!-- ═══════════════════════════════════════════════════════════════
 		     COMPARISON VIEW
