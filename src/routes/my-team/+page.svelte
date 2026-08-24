@@ -887,7 +887,7 @@
 								<option value="price">Price</option>
 								<option value="form">Form</option>
 								<option value="points">Total Pts</option>
-								<option value="transfers_in">Transfers In</option>
+								<option value="transfers_in">GW Transfers In</option>
 								<option value="xg">xG</option>
 							</select>
 						</div>
