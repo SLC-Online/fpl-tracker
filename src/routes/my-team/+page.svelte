@@ -21,7 +21,6 @@
 	let declareStep: 'select-out' | 'search-in' = $state('select-out');
 	let declareOutPlayer: SquadPlayer | null = $state(null);
 	let declareSearchQuery = $state('');
-	let declareSearchResults: any[] = $state([]);
 	let declareSearching = $state(false);
 	let declaredSectionOpen = $state(false);
 
@@ -31,7 +30,6 @@
 	let transferMode = $state(false);
 	let transferOutPlayer: SquadPlayer | null = $state(null);
 	let searchQuery = $state('');
-	let searchResults: any[] = $state([]);
 	let searching = $state(false);
 
 	// --- Helpers ---
@@ -143,43 +141,38 @@
 		declareStep = 'select-out';
 		declareOutPlayer = null;
 		declareSearchQuery = '';
-		declareSearchResults = [];
+		
 	}
 
 	function selectDeclareOut(player: SquadPlayer) {
 		declareOutPlayer = player;
 		declareStep = 'search-in';
 		declareSearchQuery = '';
-		declareSearchResults = [];
+		
 	}
 
 	let declareSearchTimeout: any;
 	function onDeclareSearchInput() {
-		clearTimeout(declareSearchTimeout);
-		declareSearchTimeout = setTimeout(() => searchDeclarePlayer(), 300);
+		// No-op: search is reactive
 	}
 
-	async function searchDeclarePlayer() {
-		if (!declareOutPlayer || declareSearchQuery.length < 2) {
-			declareSearchResults = [];
-			return;
-		}
-		declareSearching = true;
-		const currentSquadIds = rawSquad
-			.filter(p => !declaredTransfers.some(t => t.out.element_id === p.element_id))
-			.map(p => p.element_id)
-			.join(',');
-		try {
-			const resp = await fetch(
-				`/api/players?q=${encodeURIComponent(declareSearchQuery)}&pos=${declareOutPlayer.element_type}&max_price=300&exclude=${currentSquadIds}`
-			);
-			if (resp.ok) {
-				declareSearchResults = await resp.json();
-			}
-		} finally {
-			declareSearching = false;
-		}
-	}
+	let declareSearchResults = $derived.by(() => {
+		if (!declareOutPlayer || declareSearchQuery.length < 2) return [];
+		const q = stripAccents(declareSearchQuery);
+		const squadIds = new Set(
+			rawSquad
+				.filter(p => !declaredTransfers.some(t => t.out.element_id === p.element_id))
+				.map(p => p.element_id)
+		);
+		return allPlayers
+			.filter(p => {
+				if (squadIds.has(p.element_id)) return false;
+				const name = stripAccents((p.web_name || '') + ' ' + (p.first_name || '') + ' ' + (p.second_name || ''));
+				return name.includes(q);
+			})
+			.sort((a, b) => (b.total_points || 0) - (a.total_points || 0))
+			.slice(0, 30);
+	});
 
 	function completeDeclareTransfer(inPlayer: any) {
 		if (!declareOutPlayer) return;
@@ -199,7 +192,7 @@
 		declareMode = false;
 		declareOutPlayer = null;
 		declareSearchQuery = '';
-		declareSearchResults = [];
+		
 		// Reset planned transfers when base changes
 		currentTransfers = [];
 	}
@@ -220,34 +213,60 @@
 		transferOutPlayer = player;
 		transferMode = true;
 		searchQuery = '';
-		searchResults = [];
+		
+	}
+
+	// --- Transfer search (client-side for instant, accent-insensitive filtering) ---
+	let allPlayers: any[] = $state([]);
+	let allPlayersLoaded = $state(false);
+
+	async function loadAllPlayers() {
+		if (allPlayersLoaded) return;
+		try {
+			// Load without search filter to get all players
+			const resp = await fetch('/api/players?q=');
+			if (resp.ok) {
+				allPlayers = await resp.json();
+				allPlayersLoaded = true;
+			}
+		} catch {}
+	}
+
+	$effect(() => {
+		if (squadData && !allPlayersLoaded) {
+			loadAllPlayers();
+		}
+	});
+
+	function stripAccents(s: string): string {
+		return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 	}
 
 	let searchTimeout: any;
 	function onSearchInput() {
-		clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(() => searchPlayers(), 300);
+		// No-op: search is now reactive via $derived
 	}
 
-	async function searchPlayers() {
-		if (!transferOutPlayer || searchQuery.length < 2) {
-			searchResults = [];
-			return;
-		}
-		searching = true;
+	let searchResults = $derived.by(() => {
+		if (!searchQuery || searchQuery.length < 2 || !transferOutPlayer) return [];
+		const q = stripAccents(searchQuery);
 		const maxBudget = workingBank + transferOutPlayer.selling_price;
-		const excludeIds = workingSquad.map(p => p.element_id).join(',');
-		try {
-			const resp = await fetch(
-				`/api/players?q=${encodeURIComponent(searchQuery)}&pos=${transferOutPlayer.element_type}&max_price=${maxBudget}&exclude=${excludeIds}`
-			);
-			if (resp.ok) {
-				searchResults = await resp.json();
-			}
-		} finally {
-			searching = false;
-		}
-	}
+		const squadIds = new Set(workingSquad.map(p => p.element_id));
+
+		return allPlayers
+			.filter(p => {
+				if (squadIds.has(p.element_id)) return false;
+				if (maxBudget > 0 && p.now_cost > maxBudget) return false;
+				const name = stripAccents((p.web_name || '') + ' ' + (p.first_name || '') + ' ' + (p.second_name || ''));
+				return name.includes(q);
+			})
+			.sort((a, b) => {
+				const twxpA = calculatePlayerTWxP(a.projections || []);
+				const twxpB = calculatePlayerTWxP(b.projections || []);
+				return twxpB - twxpA;
+			})
+			.slice(0, 30);
+	});
 
 	function completeTransfer(inPlayer: any) {
 		if (!transferOutPlayer) return;
@@ -267,14 +286,14 @@
 		transferMode = false;
 		transferOutPlayer = null;
 		searchQuery = '';
-		searchResults = [];
+		
 	}
 
 	function cancelTransfer() {
 		transferMode = false;
 		transferOutPlayer = null;
 		searchQuery = '';
-		searchResults = [];
+		
 	}
 
 	function removeCurrentTransfer(idx: number) {

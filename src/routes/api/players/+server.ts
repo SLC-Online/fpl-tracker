@@ -38,14 +38,21 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	if (search) {
-		query = query.ilike('players.web_name', `%${search}%`);
+		// Search across web_name, first_name, second_name
+		// Also try without common prefixes like "M." to handle "Sangare" matching "M.Sangaré"
+		const cleanSearch = search.replace(/^[A-Z]\.\s*/, '');
+		query = query.or(
+			`web_name.ilike.%${search}%,first_name.ilike.%${search}%,second_name.ilike.%${search}%,web_name.ilike.%${cleanSearch}%,second_name.ilike.%${cleanSearch}%`,
+			{ referencedTable: 'players' }
+		);
 	}
 
 	if (position) {
 		query = query.eq('players.element_type', parseInt(position));
 	}
 
-	const { data: players } = await query.order('total_points', { ascending: false }).limit(50);
+	const limit = search ? 50 : 700;  // Load all when no search filter
+	const { data: players } = await query.order('total_points', { ascending: false }).limit(limit);
 
 	if (!players) return json([]);
 
