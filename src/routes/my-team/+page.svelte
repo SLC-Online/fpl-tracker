@@ -30,7 +30,6 @@
 	let transferMode = $state(false);
 	let transferOutPlayer: SquadPlayer | null = $state(null);
 	let searchQuery = $state('');
-	let searching = $state(false);
 
 	// --- Helpers ---
 	function formatPrice(cost: number): string {
@@ -615,65 +614,89 @@
 		{/if}
 
 		<!-- ═══════════════════════════════════════════════════════════════
-		     TRANSFER SEARCH PANEL
+		     TRANSFER SEARCH PANEL (fixed right sidebar on desktop, inline on mobile)
 		     ═══════════════════════════════════════════════════════════════ -->
 		{#if transferMode && transferOutPlayer}
-			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-5 border border-[var(--color-accent)]/30">
-				<div class="flex items-center justify-between mb-4">
+			<!-- Desktop: fixed right panel -->
+			<aside class="fixed right-0 top-16 bottom-0 w-80 bg-[var(--color-surface-1)] border-l border-[var(--color-surface-4)] p-4 overflow-y-auto z-40 hidden lg:block shadow-2xl shadow-black/50">
+				<div class="flex items-center justify-between mb-3">
 					<div>
 						<h3 class="font-display font-semibold text-sm">
 							Replace <span class="text-[var(--color-fall)]">{transferOutPlayer.web_name}</span>
 						</h3>
 						<p class="text-[var(--color-text-2)] text-xs mt-1">
-							Budget: <span class="font-mono">{formatPrice(workingBank + transferOutPlayer.selling_price)}</span> ·
-							Position: <span class="font-semibold">{POSITIONS[transferOutPlayer.element_type]}</span>
+							Budget: <span class="font-mono">{formatPrice(workingBank + transferOutPlayer.selling_price)}</span>
 						</p>
 					</div>
-					<button onclick={cancelTransfer} class="text-[var(--color-text-2)] text-sm hover:text-[var(--color-fall)] px-3 py-1.5 rounded-lg hover:bg-[var(--color-surface-3)]">
-						Cancel
+					<button onclick={cancelTransfer} class="text-[var(--color-text-2)] hover:text-[var(--color-fall)] p-1.5 rounded-lg hover:bg-[var(--color-surface-3)]">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
 					</button>
 				</div>
 				<input
 					type="text"
-					placeholder="Search player by name..."
+					placeholder="Search player…"
 					bind:value={searchQuery}
-					oninput={onSearchInput}
-					class="w-full px-4 py-3 rounded-xl bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/30 mb-3"
+					class="w-full px-3 py-2.5 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] text-sm mb-3"
 				/>
-
 				{#if searchResults.length > 0}
-					<!-- Header -->
-					<div class="grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 px-3 py-1.5 text-[10px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)] mb-1">
-						<span>Player</span>
-						<span class="w-14 text-right">Price</span>
-						<span class="w-10 text-right">Form</span>
-						<span class="w-12 text-right">TWxP</span>
-						<span class="w-4"></span>
-					</div>
-					<div class="max-h-64 overflow-y-auto space-y-0.5">
+					<div class="space-y-0.5">
 						{#each searchResults as player}
 							<button
 								onclick={() => completeTransfer(player)}
-								class="w-full grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-3 py-2.5 rounded-xl hover:bg-[var(--color-surface-3)] transition-colors text-left"
+								class="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-left"
 							>
-								<div class="flex items-center gap-2 min-w-0">
-									<img src={teamBadgeUrl(player.team_code)} alt="" class="w-5 h-5 flex-shrink-0" />
-									<span class="font-medium text-sm truncate">{player.web_name}</span>
-									<span class="text-[var(--color-text-3)] text-xs flex-shrink-0">{player.team_short}</span>
+								<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4 flex-shrink-0" />
+								<div class="flex-1 min-w-0">
+									<div class="font-medium text-xs truncate">{player.web_name}</div>
+									<div class="text-[var(--color-text-3)] text-[10px]">{player.team_short} · {POSITIONS[player.element_type]} · {formatPrice(player.now_cost)}</div>
 								</div>
-								<span class="font-mono text-sm w-14 text-right">{formatPrice(player.now_cost)}</span>
-								<span class="font-mono text-xs text-[var(--color-text-1)] w-10 text-right">{Number(player.form).toFixed(1)}</span>
-								<span class="font-mono text-sm text-[var(--color-accent-light)] w-12 text-right font-semibold">
-									{calculatePlayerTWxP(player.projections).toFixed(1)}
+								<span class="font-mono text-xs text-[var(--color-accent-light)] font-semibold flex-shrink-0">
+									{calculatePlayerTWxP(player.projections || []).toFixed(1)}
 								</span>
-								<span class="text-[var(--color-rise)] w-4 text-center">+</span>
 							</button>
 						{/each}
 					</div>
-				{:else if searchQuery.length >= 2 && !searching}
-					<p class="text-[var(--color-text-2)] text-sm py-4 text-center">No players found within budget.</p>
-				{:else if searching}
-					<p class="text-[var(--color-text-2)] text-sm py-4 text-center">Searching…</p>
+				{:else if searchQuery.length >= 2 && allPlayersLoaded}
+					<p class="text-[var(--color-text-2)] text-xs py-3 text-center">No players found within budget.</p>
+				{:else if !allPlayersLoaded}
+					<p class="text-[var(--color-text-2)] text-xs py-3 text-center">Loading players…</p>
+				{:else}
+					<p class="text-[var(--color-text-3)] text-xs py-3 text-center">Type to search…</p>
+				{/if}
+			</aside>
+
+			<!-- Mobile: inline panel -->
+			<section class="lg:hidden rounded-2xl bg-[var(--color-surface-2)] card-glow p-4 border border-[var(--color-accent)]/30">
+				<div class="flex items-center justify-between mb-3">
+					<h3 class="font-semibold text-sm">
+						Replace <span class="text-[var(--color-fall)]">{transferOutPlayer.web_name}</span>
+						<span class="text-[var(--color-text-2)] font-normal text-xs ml-1">({formatPrice(workingBank + transferOutPlayer.selling_price)})</span>
+					</h3>
+					<button onclick={cancelTransfer} class="text-[var(--color-text-2)] hover:text-[var(--color-fall)] text-xs">Cancel</button>
+				</div>
+				<input
+					type="text"
+					placeholder="Search player…"
+					bind:value={searchQuery}
+					class="w-full px-3 py-2.5 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] text-sm mb-2"
+				/>
+				{#if searchResults.length > 0}
+					<div class="max-h-48 overflow-y-auto space-y-0.5">
+						{#each searchResults.slice(0, 15) as player}
+							<button
+								onclick={() => completeTransfer(player)}
+								class="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-left"
+							>
+								<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4" />
+								<span class="font-medium text-xs flex-1 truncate">{player.web_name}</span>
+								<span class="text-[var(--color-text-3)] text-[10px]">{player.team_short}</span>
+								<span class="font-mono text-xs">{formatPrice(player.now_cost)}</span>
+								<span class="font-mono text-xs text-[var(--color-accent-light)]">{calculatePlayerTWxP(player.projections || []).toFixed(1)}</span>
+							</button>
+						{/each}
+					</div>
+				{:else if searchQuery.length >= 2 && allPlayersLoaded}
+					<p class="text-[var(--color-text-2)] text-xs py-2 text-center">No results.</p>
 				{/if}
 			</section>
 		{/if}
