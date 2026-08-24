@@ -1515,7 +1515,7 @@
 
 	@media (min-width: 1024px) {
 		.main-left {
-			flex: 0 0 55%;
+			flex: 0 0 48%;
 		}
 	}
 
@@ -1525,8 +1525,8 @@
 
 	@media (min-width: 1024px) {
 		.main-right {
-			flex: 0 0 43%;
-			max-width: 450px;
+			flex: 0 0 50%;
+			max-width: 560px;
 		}
 	}
 
