@@ -153,8 +153,41 @@
 				gws.add(proj.gw);
 			}
 		}
-		return [...gws].sort((a, b) => a - b).slice(0, 5);
+		return [...gws].sort((a, b) => a - b).slice(0, 7);
 	});
+
+	// Min/max per GW for squad list view colour coding
+	let squadGwMinMax = $derived.by(() => {
+		const result: Record<number, { min: number; max: number }> = {};
+		for (const gw of gwColumns) {
+			let min = Infinity, max = -Infinity;
+			for (const p of workingSquad) {
+				const proj = (p.projections || []).find(pr => pr.gw === gw);
+				if (proj) {
+					if (proj.pts < min) min = proj.pts;
+					if (proj.pts > max) max = proj.pts;
+				}
+			}
+			result[gw] = { min: min === Infinity ? 0 : min, max: max === -Infinity ? 0 : max };
+		}
+		return result;
+	});
+
+	function squadGwCellColor(pts: number, gw: number): string {
+		const { min, max } = squadGwMinMax[gw] || { min: 0, max: 1 };
+		const range = max - min || 1;
+		const ratio = (pts - min) / range;
+		if (ratio >= 0.9) return 'rgba(22, 163, 74, 0.55)';
+		if (ratio >= 0.8) return 'rgba(22, 163, 74, 0.4)';
+		if (ratio >= 0.7) return 'rgba(34, 197, 94, 0.3)';
+		if (ratio >= 0.6) return 'rgba(74, 222, 128, 0.2)';
+		if (ratio >= 0.5) return 'rgba(134, 239, 172, 0.12)';
+		if (ratio >= 0.4) return 'rgba(253, 224, 71, 0.1)';
+		if (ratio >= 0.3) return 'rgba(255, 255, 255, 0.03)';
+		if (ratio >= 0.2) return 'rgba(251, 191, 36, 0.08)';
+		if (ratio >= 0.1) return 'rgba(251, 146, 60, 0.12)';
+		return 'rgba(239, 68, 68, 0.15)';
+	}
 
 	function getPlayerGwPts(player: SquadPlayer, gw: number): string {
 		const proj = (player.projections || []).find(p => p.gw === gw);
@@ -875,7 +908,8 @@
 									</div>
 									<div class="text-right font-mono text-[10px]">{formatPrice(player.current_price)}</div>
 									{#each gwColumns as gw}
-										<div class="text-center font-mono text-[10px] text-[var(--color-text-1)]">
+										<div class="text-center font-mono text-[10px] rounded px-0.5 py-0.5"
+											style="background: {(player.projections || []).find(p => p.gw === gw)?.pts != null ? squadGwCellColor((player.projections || []).find(p => p.gw === gw)?.pts ?? 0, gw) : 'transparent'}">
 											{getPlayerGwPts(player, gw)}
 										</div>
 									{/each}
