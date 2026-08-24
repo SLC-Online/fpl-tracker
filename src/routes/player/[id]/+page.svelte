@@ -210,14 +210,20 @@
 		{@const allGws = [data.csvData.gw1, data.csvData.gw2, data.csvData.gw3, data.csvData.gw4, data.csvData.gw5, data.csvData.gw6, data.csvData.gw7, data.csvData.gw8]}
 		{@const csvGameweek = data.csvData.gameweek || 1}
 		{@const offset = Math.max(0, data.nextGw - csvGameweek)}
+		{@const remaining = allGws.slice(offset).filter(p => p !== null)}
+		{@const maxPts = Math.max(...remaining.map(p => p || 0))}
+		{@const minPts = Math.min(...remaining.map(p => p || 0))}
 		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
 			<h2 class="font-display font-semibold text-lg mb-5">Expected Points</h2>
-			<div class="grid grid-cols-4 sm:grid-cols-8 gap-3">
+			<div class="grid grid-cols-4 sm:grid-cols-8 gap-2">
 				{#each allGws.slice(offset) as pts, i}
 					{#if pts !== null}
-						<div class="text-center p-3 rounded-xl bg-[var(--color-surface-3)]">
-							<div class="text-[var(--color-text-2)] text-xs mb-1">GW{csvGameweek + offset + i}</div>
-							<div class="font-mono font-semibold text-lg">{pts.toFixed(1)}</div>
+						{@const range = maxPts - minPts || 1}
+						{@const ratio = (pts - minPts) / range}
+						<div class="text-center p-3 rounded-lg"
+							style="background: {ratio > 0.7 ? `rgba(22, 163, 74, ${0.15 + ratio * 0.25})` : ratio > 0.3 ? `rgba(202, 138, 4, ${0.08 + ratio * 0.1})` : `rgba(255, 255, 255, 0.03)`}">
+							<div class="text-[var(--color-text-2)] text-[10px] mb-1">GW{csvGameweek + offset + i}</div>
+							<div class="font-mono font-semibold text-base">{pts.toFixed(1)}</div>
 						</div>
 					{/if}
 				{/each}
