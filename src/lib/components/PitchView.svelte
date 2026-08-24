@@ -35,8 +35,8 @@
 			<defs>
 				<!-- Pitch grass stripe pattern -->
 				<pattern id="grassStripes" x="0" y="0" width="680" height="200" patternUnits="userSpaceOnUse">
-					<rect x="0" y="0" width="680" height="100" fill="rgba(255,255,255,0.03)" />
-					<rect x="0" y="100" width="680" height="100" fill="rgba(0,0,0,0.03)" />
+					<rect x="0" y="0" width="680" height="100" fill="rgba(255,255,255,0.05)" />
+					<rect x="0" y="100" width="680" height="100" fill="rgba(0,0,0,0.06)" />
 				</pattern>
 				<!-- Vignette radial gradient -->
 				<radialGradient id="pitchVignette" cx="50%" cy="50%" r="70%">
@@ -52,39 +52,39 @@
 			<rect x="0" y="0" width="680" height="1000" fill="url(#grassStripes)" />
 
 			<!-- Pitch outline -->
-			<rect x="40" y="30" width="600" height="940" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+			<rect x="40" y="30" width="600" height="940" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
 
 			<!-- Halfway line -->
-			<line x1="40" y1="500" x2="640" y2="500" stroke="rgba(255,255,255,0.09)" stroke-width="1.5" />
+			<line x1="40" y1="500" x2="640" y2="500" stroke="rgba(255,255,255,0.22)" stroke-width="1.5" />
 
 			<!-- Centre circle -->
-			<circle cx="340" cy="500" r="80" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" />
+			<circle cx="340" cy="500" r="80" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" />
 			<!-- Centre spot -->
-			<circle cx="340" cy="500" r="3" fill="rgba(255,255,255,0.12)" />
+			<circle cx="340" cy="500" r="3" fill="rgba(255,255,255,0.3)" />
 
 			<!-- TOP: Penalty area (GK end) -->
-			<rect x="170" y="30" width="340" height="150" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1.5" />
+			<rect x="170" y="30" width="340" height="150" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
 			<!-- Top 6-yard box -->
-			<rect x="250" y="30" width="180" height="55" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2" />
+			<rect x="250" y="30" width="180" height="55" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
 			<!-- Top penalty spot -->
-			<circle cx="340" cy="135" r="2.5" fill="rgba(255,255,255,0.1)" />
+			<circle cx="340" cy="135" r="2.5" fill="rgba(255,255,255,0.25)" />
 			<!-- Top penalty arc -->
-			<path d="M 265 180 A 80 80 0 0 0 415 180" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2" />
+			<path d="M 265 180 A 80 80 0 0 0 415 180" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
 
 			<!-- BOTTOM: Penalty area (FWD end) -->
-			<rect x="170" y="820" width="340" height="150" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1.5" />
+			<rect x="170" y="820" width="340" height="150" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.5" />
 			<!-- Bottom 6-yard box -->
-			<rect x="250" y="915" width="180" height="55" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2" />
+			<rect x="250" y="915" width="180" height="55" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
 			<!-- Bottom penalty spot -->
-			<circle cx="340" cy="865" r="2.5" fill="rgba(255,255,255,0.1)" />
+			<circle cx="340" cy="865" r="2.5" fill="rgba(255,255,255,0.25)" />
 			<!-- Bottom penalty arc -->
-			<path d="M 265 820 A 80 80 0 0 1 415 820" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2" />
+			<path d="M 265 820 A 80 80 0 0 1 415 820" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
 
 			<!-- Corner arcs -->
-			<path d="M 40 38 A 8 8 0 0 0 48 30" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2" />
-			<path d="M 632 30 A 8 8 0 0 0 640 38" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2" />
-			<path d="M 40 962 A 8 8 0 0 1 48 970" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2" />
-			<path d="M 632 970 A 8 8 0 0 1 640 962" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2" />
+			<path d="M 40 38 A 8 8 0 0 0 48 30" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
+			<path d="M 632 30 A 8 8 0 0 0 640 38" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
+			<path d="M 40 962 A 8 8 0 0 1 48 970" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
+			<path d="M 632 970 A 8 8 0 0 1 640 962" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.2" />
 
 			<!-- Vignette overlay -->
 			<rect x="0" y="0" width="680" height="1000" fill="url(#pitchVignette)" />
