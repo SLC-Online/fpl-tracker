@@ -177,7 +177,7 @@
 	</div>
 
 	<!-- Player table -->
-	<div class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
+	<div class="rounded-xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
 		<table class="w-full">
 			<thead>
 				<tr class="text-[var(--color-text-2)] text-xs uppercase tracking-wider border-b border-[var(--color-surface-4)]">

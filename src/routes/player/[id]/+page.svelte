@@ -137,7 +137,7 @@
 	<!-- Stats Grid -->
 	{#if data.timeline.length > 0}
 		{@const latest = data.timeline[data.timeline.length - 1]}
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+		<section class="rounded-xl bg-[var(--color-surface-2)] card-glow p-6">
 			<h2 class="font-display font-semibold text-lg mb-4">Stats</h2>
 			<div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
 				<div class="text-center">
@@ -195,12 +195,12 @@
 	<!-- Chart -->
 	<!-- Price & Ownership Chart -->
 	{#if data.timeline.length >= 2}
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+		<section class="rounded-xl bg-[var(--color-surface-2)] card-glow p-6">
 			<h2 class="font-display font-semibold text-lg mb-4">Price & Ownership</h2>
 			<div bind:this={chartContainer}></div>
 		</section>
 	{:else}
-		<div class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-10 text-center">
+		<div class="rounded-xl bg-[var(--color-surface-2)] card-glow p-10 text-center">
 			<p class="text-[var(--color-text-2)]">Collecting data — charts appear after more snapshots.</p>
 		</div>
 	{/if}
@@ -213,7 +213,7 @@
 		{@const remaining = allGws.slice(offset).filter(p => p !== null)}
 		{@const maxPts = Math.max(...remaining.map(p => p || 0))}
 		{@const minPts = Math.min(...remaining.map(p => p || 0))}
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+		<section class="rounded-xl bg-[var(--color-surface-2)] card-glow p-6">
 			<h2 class="font-display font-semibold text-lg mb-5">Expected Points</h2>
 			<div class="grid grid-cols-4 sm:grid-cols-8 gap-2">
 				{#each allGws.slice(offset) as pts, i}
@@ -243,7 +243,7 @@
 
 	<!-- Price History -->
 	{#if data.priceChanges.length > 0}
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+		<section class="rounded-xl bg-[var(--color-surface-2)] card-glow p-6">
 			<h2 class="font-display font-semibold text-lg mb-4">Price History</h2>
 			<div class="space-y-0">
 				{#each data.priceChanges as pc}

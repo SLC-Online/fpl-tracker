@@ -40,7 +40,7 @@
 
 	<!-- Price Changes Banner (if any) -->
 	{#if data.priceChanges.length > 0}
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+		<section class="rounded-xl bg-[var(--color-surface-2)] card-glow p-6">
 			<h2 class="font-display font-semibold text-xl mb-4">Price Changes</h2>
 			<div class="grid gap-2">
 				{#each data.priceChanges.slice(0, 10) as pc}
@@ -67,7 +67,7 @@
 	<!-- Movers Grid -->
 	<div class="grid lg:grid-cols-2 gap-6">
 		<!-- Rising -->
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
+		<section class="rounded-xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
 			<div class="px-6 pt-6 pb-4 flex items-center gap-3">
 				<div class="w-2 h-2 rounded-full bg-[var(--color-rise)]"></div>
 				<h2 class="font-display font-semibold text-lg">Rising</h2>
@@ -92,7 +92,7 @@
 		</section>
 
 		<!-- Falling -->
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
+		<section class="rounded-xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
 			<div class="px-6 pt-6 pb-4 flex items-center gap-3">
 				<div class="w-2 h-2 rounded-full bg-[var(--color-fall)]"></div>
 				<h2 class="font-display font-semibold text-lg">Falling</h2>
