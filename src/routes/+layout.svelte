@@ -6,8 +6,9 @@
 
 	const navItems = [
 		{ href: '/', label: 'Overview' },
-		{ href: '/price-changes', label: 'Prices' },
 		{ href: '/players', label: 'Players' },
+		{ href: '/my-team', label: 'My Team' },
+		{ href: '/price-changes', label: 'Prices' },
 	];
 </script>
 
