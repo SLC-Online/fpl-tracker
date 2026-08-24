@@ -236,26 +236,26 @@
 		z-index: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
-		padding: 2rem 0.75rem;
+		gap: 1rem;
+		padding: 1.5rem 1rem;
 	}
 
 	@media (min-width: 640px) {
 		.formation-container {
-			gap: 2rem;
-			padding: 2.5rem 1.5rem;
+			gap: 1.5rem;
+			padding: 2rem 1.5rem;
 		}
 	}
 
 	.formation-row {
 		display: flex;
 		justify-content: center;
-		gap: 0.25rem;
+		gap: 0.5rem;
 	}
 
 	@media (min-width: 640px) {
 		.formation-row {
-			gap: 0.75rem;
+			gap: 1rem;
 		}
 	}
 
