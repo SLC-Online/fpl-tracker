@@ -34,6 +34,8 @@
 	let transferMode = $state(false);
 	let transferOutPlayer: SquadPlayer | null = $state(null);
 	let searchQuery = $state('');
+	let filterTeam = $state('');
+	let filterPos = $state('');
 
 	// --- Helpers ---
 	function formatPrice(cost: number): string {
@@ -209,10 +211,16 @@
 
 	// --- Transfer planner ---
 	function startTransferOut(player: SquadPlayer) {
-		if (transferMode) return;
+		if (transferMode && transferOutPlayer?.element_id === player.element_id) {
+			// Clicking same player deselects
+			cancelTransfer();
+			return;
+		}
 		transferOutPlayer = player;
 		transferMode = true;
 		searchQuery = '';
+		filterTeam = '';
+		filterPos = String(player.element_type);  // Default to same position
 	}
 
 	// --- Transfer search (client-side for instant, accent-insensitive filtering) ---
@@ -246,24 +254,38 @@
 	}
 
 	let searchResults = $derived.by(() => {
-		if (!searchQuery || searchQuery.length < 2 || !transferOutPlayer) return [];
-		const q = stripAccents(searchQuery);
+		if (!transferOutPlayer || !allPlayersLoaded) return [];
 		const maxBudget = workingBank + transferOutPlayer.selling_price;
 		const squadIds = new Set(workingSquad.map(p => p.element_id));
+		const q = searchQuery ? stripAccents(searchQuery) : '';
 
 		return allPlayers
 			.filter(p => {
 				if (squadIds.has(p.element_id)) return false;
-				if (maxBudget > 0 && p.now_cost > maxBudget) return false;
-				const name = stripAccents((p.web_name || '') + ' ' + (p.first_name || '') + ' ' + (p.second_name || ''));
-				return name.includes(q);
+				if (p.now_cost > maxBudget) return false;
+				// Position filter: default to same position as outgoing player
+				const posFilter = filterPos || String(transferOutPlayer!.element_type);
+				if (posFilter && p.element_type !== parseInt(posFilter)) return false;
+				// Team filter
+				if (filterTeam && p.team_short !== filterTeam) return false;
+				// Name search (if query entered)
+				if (q.length >= 2) {
+					const name = stripAccents((p.web_name || '') + ' ' + (p.first_name || '') + ' ' + (p.second_name || ''));
+					if (!name.includes(q)) return false;
+				}
+				return true;
 			})
-			.sort((a, b) => {
-				const twxpA = calculatePlayerTWxP(a.projections || []);
-				const twxpB = calculatePlayerTWxP(b.projections || []);
-				return twxpB - twxpA;
-			})
-			.slice(0, 30);
+			.sort((a, b) => calculatePlayerTWxP(b.projections || []) - calculatePlayerTWxP(a.projections || []))
+			.slice(0, 40);
+	});
+
+	// Available teams for filter dropdown
+	let availableTeams = $derived.by(() => {
+		const teams = new Set<string>();
+		for (const p of allPlayers) {
+			if (p.team_short) teams.add(p.team_short);
+		}
+		return [...teams].sort();
 	});
 
 	function completeTransfer(inPlayer: any) {
@@ -769,17 +791,34 @@
 							</div>
 						</div>
 
-						<!-- Search input -->
-						<div class="panel-card">
+						<!-- Filters + Search input -->
+						<div class="panel-card space-y-2">
 							<input
 								type="text"
-								placeholder="Search replacement..."
+								placeholder="Search by name..."
 								bind:value={searchQuery}
 								class="panel-search-input"
 							/>
+							<div class="flex gap-2">
+								<select bind:value={filterPos}
+									class="flex-1 px-2 py-1.5 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[10px] focus:outline-none focus:border-[var(--color-accent)]">
+									<option value="">All positions</option>
+									<option value="1">GKP</option>
+									<option value="2">DEF</option>
+									<option value="3">MID</option>
+									<option value="4">FWD</option>
+								</select>
+								<select bind:value={filterTeam}
+									class="flex-1 px-2 py-1.5 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[10px] focus:outline-none focus:border-[var(--color-accent)]">
+									<option value="">All teams</option>
+									{#each availableTeams as team}
+										<option value={team}>{team}</option>
+									{/each}
+								</select>
+							</div>
 						</div>
 
-						<!-- Search results -->
+						<!-- Search results (auto-populated) -->
 						<div class="panel-results">
 							{#if searchResults.length > 0}
 								{#each searchResults as player}
@@ -795,11 +834,9 @@
 										</div>
 									</button>
 								{/each}
-							{:else if searchQuery.length >= 2 && allPlayersLoaded}
-								<div class="panel-empty">No players within budget</div>
-							{:else if searchQuery.length < 2}
-								<div class="panel-empty">Type to search replacements</div>
-							{:else if !allPlayersLoaded}
+							{:else if allPlayersLoaded}
+								<div class="panel-empty">No players match filters</div>
+							{:else}
 								<div class="panel-empty">Loading player database...</div>
 							{/if}
 						</div>
@@ -1303,6 +1340,7 @@
 		.main-split {
 			flex-direction: row;
 			gap: 20px;
+			align-items: flex-start;
 		}
 	}
 
