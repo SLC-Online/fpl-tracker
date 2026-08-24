@@ -104,13 +104,13 @@ body {
 
 /* Subtle glow effect for cards */
 .card-glow {
-	box-shadow: 0 0 0 1px var(--color-surface-4),
-	            0 4px 24px -4px rgba(0, 0, 0, 0.4);
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04),
+	            0 2px 12px -2px rgba(0, 0, 0, 0.3);
 }
 
 .card-glow:hover {
-	box-shadow: 0 0 0 1px var(--color-accent),
-	            0 4px 32px -4px rgba(99, 102, 241, 0.15);
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08),
+	            0 4px 16px -2px rgba(0, 0, 0, 0.4);
 }
 
 /* Smooth transitions */
