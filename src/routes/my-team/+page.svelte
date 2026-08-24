@@ -144,14 +144,12 @@
 		declareStep = 'select-out';
 		declareOutPlayer = null;
 		declareSearchQuery = '';
-		
 	}
 
 	function selectDeclareOut(player: SquadPlayer) {
 		declareOutPlayer = player;
 		declareStep = 'search-in';
 		declareSearchQuery = '';
-		
 	}
 
 	let declareSearchTimeout: any;
@@ -195,7 +193,6 @@
 		declareMode = false;
 		declareOutPlayer = null;
 		declareSearchQuery = '';
-		
 		// Reset planned transfers when base changes
 		currentTransfers = [];
 	}
@@ -216,7 +213,6 @@
 		transferOutPlayer = player;
 		transferMode = true;
 		searchQuery = '';
-		
 	}
 
 	// --- Transfer search (client-side for instant, accent-insensitive filtering) ---
@@ -226,7 +222,6 @@
 	async function loadAllPlayers() {
 		if (allPlayersLoaded) return;
 		try {
-			// Load without search filter to get all players
 			const resp = await fetch('/api/players?q=');
 			if (resp.ok) {
 				allPlayers = await resp.json();
@@ -289,14 +284,12 @@
 		transferMode = false;
 		transferOutPlayer = null;
 		searchQuery = '';
-		
 	}
 
 	function cancelTransfer() {
 		transferMode = false;
 		transferOutPlayer = null;
 		searchQuery = '';
-		
 	}
 
 	function removeCurrentTransfer(idx: number) {
@@ -366,7 +359,7 @@
 		return colors[elementType] || '';
 	}
 
-	// Fixture difficulty color (placeholder - ready for real data)
+	// Fixture difficulty color (placeholder)
 	function fixtureDifficultyClass(_difficulty: number): string {
 		const classes: Record<number, string> = {
 			1: 'text-emerald-400 bg-emerald-500/10',
@@ -383,128 +376,134 @@
 	<title>My Team — FPL Tracker</title>
 </svelte:head>
 
-<div class="space-y-6">
-	{#if !squadData}
-		<!-- ═══════════════════════════════════════════════════════════════
-		     SQUAD LOADER
-		     ═══════════════════════════════════════════════════════════════ -->
-		<div class="flex items-center justify-center min-h-[60vh]">
-			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-8 w-full max-w-md">
-				<h1 class="font-display font-bold text-2xl mb-2">Transfer Planner</h1>
-				<p class="text-[var(--color-text-2)] text-sm mb-6 leading-relaxed">
-					Enter your FPL Manager ID to load your squad. You can find it in the URL when viewing your team on the
-					<a href="https://fantasy.premierleague.com" target="_blank" class="text-[var(--color-accent-light)] hover:underline">FPL website</a>
-					— it's the number after <code class="font-mono text-xs bg-[var(--color-surface-3)] px-1.5 py-0.5 rounded">/entry/</code>
-				</p>
-				<div class="flex gap-3">
-					<input
-						type="text"
-						placeholder="e.g. 1234567"
-						bind:value={managerId}
-						onkeydown={(e) => { if (e.key === 'Enter') loadSquad(); }}
-						class="flex-1 px-4 py-3 rounded-xl bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] font-mono placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/30"
-					/>
-					<button
-						onclick={loadSquad}
-						disabled={loading || !managerId.trim()}
-						class="px-6 py-3 rounded-xl bg-[var(--color-accent)] text-white font-semibold hover:bg-[var(--color-accent-light)] disabled:opacity-40 disabled:cursor-not-allowed"
-					>
-						{loading ? 'Loading…' : 'Load'}
-					</button>
-				</div>
-				{#if errorMsg}
-					<p class="text-[var(--color-fall)] text-sm mt-4">{errorMsg}</p>
-				{/if}
-			</section>
-		</div>
-	{:else}
+{#if !squadData}
+	<!-- ═══════════════════════════════════════════════════════════════
+	     SQUAD LOADER
+	     ═══════════════════════════════════════════════════════════════ -->
+	<div class="loader-container">
+		<section class="loader-card">
+			<div class="loader-icon">
+				<svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+					<circle cx="24" cy="24" r="20" stroke="var(--color-surface-4)" stroke-width="2" />
+					<circle cx="24" cy="24" r="8" stroke="var(--color-accent)" stroke-width="1.5" fill="none" />
+					<path d="M24 4 L24 8 M24 40 L24 44 M4 24 L8 24 M40 24 L44 24" stroke="var(--color-surface-4)" stroke-width="1.5" stroke-linecap="round" />
+				</svg>
+			</div>
+			<h1 class="font-display font-bold text-3xl mb-1 text-[var(--color-text-0)]">Transfer Planner</h1>
+			<p class="text-[var(--color-text-2)] text-sm mb-8 leading-relaxed max-w-sm text-center">
+				Enter your FPL Manager ID to load your squad.<br />
+				Find it in the URL after <code class="font-mono text-[10px] bg-[var(--color-surface-3)] px-1.5 py-0.5 rounded text-[var(--color-accent-light)]">/entry/</code>
+			</p>
+			<div class="loader-input-group">
+				<input
+					type="text"
+					placeholder="e.g. 1234567"
+					bind:value={managerId}
+					onkeydown={(e) => { if (e.key === 'Enter') loadSquad(); }}
+					class="loader-input"
+				/>
+				<button
+					onclick={loadSquad}
+					disabled={loading || !managerId.trim()}
+					class="loader-btn"
+				>
+					{#if loading}
+						<svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="32" stroke-dashoffset="12" /></svg>
+					{:else}
+						Load Squad
+					{/if}
+				</button>
+			</div>
+			{#if errorMsg}
+				<p class="text-[var(--color-fall)] text-sm mt-4 text-center">{errorMsg}</p>
+			{/if}
+		</section>
+	</div>
+{:else}
+	<div class="page-shell">
 		<!-- ═══════════════════════════════════════════════════════════════
 		     TOP BAR
 		     ═══════════════════════════════════════════════════════════════ -->
-		<header class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-5">
-			<div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+		<header class="top-bar">
+			<div class="top-bar-inner">
 				<!-- Left: Team info -->
-				<div class="min-w-0">
-					<h1 class="font-display font-bold text-xl lg:text-2xl truncate">{squadData.manager.team_name}</h1>
-					<p class="text-[var(--color-text-2)] text-sm mt-0.5">
+				<div class="top-bar-team">
+					<h1 class="font-display font-bold text-xl truncate">{squadData.manager.team_name}</h1>
+					<p class="top-bar-meta">
 						{squadData.manager.name} · GW{squadData.gameweek} · Rank {formatRank(squadData.manager.overall_rank)}
 					</p>
 				</div>
-				<!-- Right: Key stats -->
-				<div class="flex flex-wrap items-center gap-4 lg:gap-6">
-					<!-- Free Transfers -->
-					<div class="text-center">
+				<!-- Right: Stats strip -->
+				<div class="top-bar-stats">
+					<div class="stat-cell">
 						<select
 							bind:value={freeTransfers}
-							class="bg-[var(--color-surface-3)] border border-[var(--color-surface-4)] rounded-lg px-3 py-1.5 font-mono text-sm text-[var(--color-text-0)] focus:outline-none focus:border-[var(--color-accent)]"
+							class="stat-select"
 						>
 							<option value={1}>1 FT</option>
 							<option value={2}>2 FT</option>
 							<option value={3}>3 FT</option>
 							<option value={15}>WC</option>
 						</select>
-						<div class="text-[var(--color-text-3)] text-[10px] mt-1 uppercase tracking-wider">Free Transfers</div>
+						<span class="stat-label">Transfers</span>
 					</div>
-					<!-- Bank -->
-					<div class="text-center">
-						<div class="font-mono text-lg font-semibold">{formatPrice(workingBank)}</div>
-						<div class="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider">Bank</div>
+					<div class="stat-cell">
+						<span class="stat-value font-mono">{formatPrice(workingBank)}</span>
+						<span class="stat-label">Bank</span>
 					</div>
-					<!-- Squad Value -->
-					<div class="text-center">
-						<div class="font-mono text-lg font-semibold">{formatPrice(squadData.squad_value)}</div>
-						<div class="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider">Squad Value</div>
+					<div class="stat-cell">
+						<span class="stat-value font-mono">{formatPrice(squadData.squad_value)}</span>
+						<span class="stat-label">Value</span>
 					</div>
-					<!-- Transfer Cost -->
-					<div class="text-center">
-						<div class="font-mono text-lg font-semibold {transferCost > 0 ? 'text-[var(--color-fall)]' : 'text-[var(--color-rise)]'}">
-							{transferCost > 0 ? `-${transferCost}` : '0'} pts
-						</div>
-						<div class="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider">Transfer Cost</div>
+					<div class="stat-cell">
+						<span class="stat-value font-mono {transferCost > 0 ? 'text-[var(--color-fall)]' : 'text-[var(--color-rise)]'}">
+							{transferCost > 0 ? `-${transferCost}` : '0'}
+						</span>
+						<span class="stat-label">Cost</span>
 					</div>
-					<!-- TWxP -->
-					<div class="text-center">
-						<div class="font-mono text-lg font-semibold text-[var(--color-accent-light)]">{workingTWxP.toFixed(1)}</div>
-						<div class="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider">TWxP</div>
+					<div class="stat-cell">
+						<span class="stat-value font-mono text-[var(--color-accent-light)]">{workingTWxP.toFixed(1)}</span>
+						<span class="stat-label">TWxP</span>
 					</div>
 				</div>
 			</div>
 		</header>
 
 		<!-- ═══════════════════════════════════════════════════════════════
-		     DECLARE ACTUAL TRANSFERS
+		     DECLARE ACTUAL TRANSFERS (Collapsible)
 		     ═══════════════════════════════════════════════════════════════ -->
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
+		<section class="declare-section">
 			<button
 				onclick={() => declaredSectionOpen = !declaredSectionOpen}
-				class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[var(--color-surface-3)]/30"
+				class="declare-toggle"
 			>
 				<div class="flex items-center gap-3">
-					<span class="text-[var(--color-warning)] text-lg">⚠</span>
+					<span class="declare-icon">⚠</span>
 					<div>
-						<h2 class="font-display font-semibold text-sm">Declare Actual Transfers</h2>
-						<p class="text-[var(--color-text-2)] text-xs mt-0.5">
-							Made transfers since last deadline? Declare them here to update your base squad.
-						</p>
+						<span class="declare-title">Declare Actual Transfers</span>
+						{#if declaredTransfers.length > 0}
+							<span class="declare-count">{declaredTransfers.length}</span>
+						{/if}
 					</div>
 				</div>
-				<span class="text-[var(--color-text-2)] text-sm transition-transform {declaredSectionOpen ? 'rotate-180' : ''}">▾</span>
+				<svg class="declare-chevron {declaredSectionOpen ? 'rotate-180' : ''}" width="16" height="16" viewBox="0 0 16 16" fill="none">
+					<path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+				</svg>
 			</button>
 
 			{#if declaredSectionOpen}
-				<div class="px-5 pb-5 border-t border-[var(--color-surface-4)] pt-4 space-y-3">
-					<!-- Declared transfers list -->
+				<div class="declare-body">
 					{#if declaredTransfers.length > 0}
-						<div class="space-y-2">
+						<div class="space-y-2 mb-3">
 							{#each declaredTransfers as t, i}
-								<div class="flex items-center gap-3 px-3 py-2 rounded-xl bg-[var(--color-surface-3)]/50 text-sm">
+								<div class="transfer-pill">
 									<img src={teamBadgeUrl(t.out.team_code)} alt="" class="w-4 h-4" />
-									<span class="text-[var(--color-fall)]">{t.out.web_name}</span>
-									<span class="text-[var(--color-text-3)]">→</span>
+									<span class="text-[var(--color-fall)] text-xs font-medium">{t.out.web_name}</span>
+									<svg class="w-3 h-3 text-[var(--color-text-3)]" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M10 5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
 									<img src={teamBadgeUrl(t.in.team_code)} alt="" class="w-4 h-4" />
-									<span class="text-[var(--color-rise)]">{t.in.web_name}</span>
-									<span class="font-mono text-xs text-[var(--color-text-2)] ml-auto">{formatPrice(t.in.current_price)}</span>
-									<button onclick={() => removeDeclaredTransfer(i)} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] ml-2 text-xs">✕</button>
+									<span class="text-[var(--color-rise)] text-xs font-medium">{t.in.web_name}</span>
+									<span class="font-mono text-[10px] text-[var(--color-text-2)] ml-auto">{formatPrice(t.in.current_price)}</span>
+									<button onclick={() => removeDeclaredTransfer(i)} class="ml-2 text-[var(--color-text-3)] hover:text-[var(--color-fall)] text-xs leading-none">✕</button>
 								</div>
 							{/each}
 						</div>
@@ -513,59 +512,50 @@
 					{#if declareMode}
 						{#if declareStep === 'select-out'}
 							<div class="space-y-2">
-								<p class="text-[var(--color-text-1)] text-sm font-medium">Who did you sell?</p>
-								<div class="max-h-48 overflow-y-auto space-y-1">
+								<p class="text-[var(--color-text-1)] text-xs font-medium">Who did you sell?</p>
+								<div class="declare-player-list">
 									{#each rawSquad.filter(p => !declaredTransfers.some(t => t.out.element_id === p.element_id)) as player}
-										<button
-											onclick={() => selectDeclareOut(player)}
-											class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-left text-sm"
-										>
+										<button onclick={() => selectDeclareOut(player)} class="declare-player-row">
 											<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4" />
-											<span>{player.web_name}</span>
-											<span class="text-[var(--color-text-3)] text-xs ml-auto">{POSITIONS[player.element_type]}</span>
-											<span class="font-mono text-xs text-[var(--color-text-2)]">{formatPrice(player.selling_price)}</span>
+											<span class="flex-1 text-xs">{player.web_name}</span>
+											<span class="text-[var(--color-text-3)] text-[10px]">{POSITIONS[player.element_type]}</span>
+											<span class="font-mono text-[10px] text-[var(--color-text-2)]">{formatPrice(player.selling_price)}</span>
 										</button>
 									{/each}
 								</div>
-								<button onclick={cancelDeclare} class="text-[var(--color-text-2)] text-xs hover:text-[var(--color-text-0)]">Cancel</button>
+								<button onclick={cancelDeclare} class="text-[var(--color-text-3)] text-[10px] hover:text-[var(--color-text-1)]">Cancel</button>
 							</div>
 						{:else if declareStep === 'search-in' && declareOutPlayer}
 							<div class="space-y-2">
-								<p class="text-[var(--color-text-1)] text-sm font-medium">
-									Sold <span class="text-[var(--color-fall)]">{declareOutPlayer.web_name}</span> — who did you buy?
+								<p class="text-[var(--color-text-1)] text-xs font-medium">
+									Sold <span class="text-[var(--color-fall)]">{declareOutPlayer.web_name}</span> — who came in?
 								</p>
 								<input
 									type="text"
 									placeholder="Search replacement..."
 									bind:value={declareSearchQuery}
 									oninput={onDeclareSearchInput}
-									class="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] text-sm"
+									class="panel-search-input"
 								/>
 								{#if declareSearchResults.length > 0}
-									<div class="max-h-48 overflow-y-auto space-y-1">
+									<div class="declare-player-list">
 										{#each declareSearchResults as player}
-											<button
-												onclick={() => completeDeclareTransfer(player)}
-												class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-left text-sm"
-											>
+											<button onclick={() => completeDeclareTransfer(player)} class="declare-player-row">
 												<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4" />
-												<span class="flex-1">{player.web_name}</span>
-												<span class="text-[var(--color-text-3)] text-xs">{player.team_short}</span>
-												<span class="font-mono text-xs">{formatPrice(player.now_cost)}</span>
+												<span class="flex-1 text-xs">{player.web_name}</span>
+												<span class="text-[var(--color-text-3)] text-[10px]">{player.team_short}</span>
+												<span class="font-mono text-[10px]">{formatPrice(player.now_cost)}</span>
 											</button>
 										{/each}
 									</div>
 								{:else if declareSearchQuery.length >= 2 && !declareSearching}
-									<p class="text-[var(--color-text-2)] text-xs">No players found.</p>
+									<p class="text-[var(--color-text-3)] text-[10px]">No players found.</p>
 								{/if}
-								<button onclick={cancelDeclare} class="text-[var(--color-text-2)] text-xs hover:text-[var(--color-text-0)]">Cancel</button>
+								<button onclick={cancelDeclare} class="text-[var(--color-text-3)] text-[10px] hover:text-[var(--color-text-1)]">Cancel</button>
 							</div>
 						{/if}
 					{:else}
-						<button
-							onclick={startDeclareTransfer}
-							class="px-4 py-2 rounded-lg bg-[var(--color-surface-3)] text-sm text-[var(--color-text-1)] hover:bg-[var(--color-surface-4)] hover:text-[var(--color-text-0)]"
-						>
+						<button onclick={startDeclareTransfer} class="declare-add-btn">
 							+ Declare a transfer
 						</button>
 					{/if}
@@ -574,42 +564,36 @@
 		</section>
 
 		<!-- ═══════════════════════════════════════════════════════════════
-		     PLANNED TRANSFERS (current working set)
+		     PLANNED TRANSFERS STRIP
 		     ═══════════════════════════════════════════════════════════════ -->
 		{#if currentTransfers.length > 0}
-			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-5 space-y-3">
-				<div class="flex items-center justify-between">
+			<section class="transfers-strip">
+				<div class="transfers-strip-header">
 					<h2 class="font-display font-semibold text-sm">Planned Transfers</h2>
 					<div class="flex gap-2">
-						<button
-							onclick={saveAsOption}
-							class="px-3 py-1.5 rounded-lg bg-[var(--color-accent)] text-white text-xs font-medium hover:bg-[var(--color-accent-light)]"
-						>
+						<button onclick={saveAsOption} class="strip-btn strip-btn--accent">
 							Save as Option {String.fromCharCode(65 + savedOptions.length)}
 						</button>
-						<button
-							onclick={resetTransfers}
-							class="px-3 py-1.5 rounded-lg bg-[var(--color-surface-3)] text-[var(--color-text-2)] text-xs font-medium hover:text-[var(--color-fall)]"
-						>
+						<button onclick={resetTransfers} class="strip-btn strip-btn--ghost">
 							Reset
 						</button>
 					</div>
 				</div>
-				<div class="space-y-2">
+				<div class="transfers-strip-list">
 					{#each currentTransfers as t, i}
-						<div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[var(--color-surface-3)]/50 text-sm">
+						<div class="transfer-pill transfer-pill--lg">
 							<img src={teamBadgeUrl(t.out.team_code)} alt="" class="w-5 h-5" />
-							<span class="text-[var(--color-fall)] font-medium">{t.out.web_name}</span>
-							<span class="font-mono text-xs text-[var(--color-text-3)]">{formatPrice(t.out.selling_price)}</span>
-							<span class="text-[var(--color-text-3)] mx-1">→</span>
+							<span class="text-[var(--color-fall)] text-xs font-semibold">{t.out.web_name}</span>
+							<span class="font-mono text-[10px] text-[var(--color-text-3)]">{formatPrice(t.out.selling_price)}</span>
+							<svg class="w-3.5 h-3.5 text-[var(--color-text-3)]" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M10 5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
 							<img src={teamBadgeUrl(t.in.team_code)} alt="" class="w-5 h-5" />
-							<span class="text-[var(--color-rise)] font-medium">{t.in.web_name}</span>
-							<span class="font-mono text-xs text-[var(--color-text-3)]">{formatPrice(t.in.current_price)}</span>
-							<span class="font-mono text-xs ml-auto {calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections) > 0 ? 'text-[var(--color-rise)]' : 'text-[var(--color-fall)]'}">
-								{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)) > 0 ? '+' : ''}{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)).toFixed(1)} xPts
+							<span class="text-[var(--color-rise)] text-xs font-semibold">{t.in.web_name}</span>
+							<span class="font-mono text-[10px] text-[var(--color-text-3)]">{formatPrice(t.in.current_price)}</span>
+							<span class="font-mono text-[10px] ml-auto {calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections) > 0 ? 'text-[var(--color-rise)]' : 'text-[var(--color-fall)]'}">
+								{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)) > 0 ? '+' : ''}{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)).toFixed(1)}
 							</span>
-							<button onclick={() => removeCurrentTransfer(i)} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] ml-2" title="Remove transfer">
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+							<button onclick={() => removeCurrentTransfer(i)} class="ml-2 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
 							</button>
 						</div>
 					{/each}
@@ -618,32 +602,30 @@
 		{/if}
 
 		<!-- ═══════════════════════════════════════════════════════════════
-		     MAIN LAYOUT: Pitch/List (left) + Player Panel (right)
+		     MAIN SPLIT LAYOUT: Pitch (left) + Panel (right)
 		     ═══════════════════════════════════════════════════════════════ -->
-		<div class="flex gap-5">
-			<!-- LEFT: Squad view -->
-			<div class="flex-1 min-w-0">
-				<!-- View toggle -->
-				<div class="flex items-center justify-between mb-3">
-					<div class="flex items-center gap-0.5 bg-[var(--color-surface-3)] rounded-lg p-0.5">
+		<div class="main-split">
+			<!-- LEFT: Pitch / List -->
+			<div class="main-left">
+				<!-- View toggle bar -->
+				<div class="view-toggle-bar">
+					<div class="view-toggle-pills">
 						<button
 							onclick={() => viewMode = 'pitch'}
-							class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
-								{viewMode === 'pitch' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-2)] hover:text-[var(--color-text-0)]'}"
+							class="view-pill {viewMode === 'pitch' ? 'view-pill--active' : ''}"
 						>Pitch</button>
 						<button
 							onclick={() => viewMode = 'list'}
-							class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors
-								{viewMode === 'list' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-2)] hover:text-[var(--color-text-0)]'}"
+							class="view-pill {viewMode === 'list' ? 'view-pill--active' : ''}"
 						>List</button>
 					</div>
 					{#if transferOutPlayer}
-						<span class="text-xs text-[var(--color-accent)]">
-							Replacing: <strong>{transferOutPlayer.web_name}</strong>
-							<button onclick={cancelTransfer} class="ml-2 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
+						<span class="text-[10px] text-[var(--color-accent-light)]">
+							Replacing <strong class="font-semibold">{transferOutPlayer.web_name}</strong>
+							<button onclick={cancelTransfer} class="ml-1.5 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
 						</span>
 					{:else}
-						<span class="text-[var(--color-text-3)] text-xs hidden sm:block">Tap a player to transfer out</span>
+						<span class="text-[var(--color-text-3)] text-[10px] hidden sm:block">Tap a player to start a transfer</span>
 					{/if}
 				</div>
 
@@ -655,182 +637,222 @@
 						selectedId={transferOutPlayer?.element_id}
 					/>
 				{:else}
-		<!-- LIST VIEW -->
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
-					<div class="grid grid-cols-[2.5fr_auto_auto_auto_repeat(var(--gw-cols,5),minmax(0,1fr))_auto_auto] gap-x-2 px-5 py-3 text-[10px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)] items-center"
-						style="--gw-cols: {gwColumns.length}; grid-template-columns: 2.5fr 52px 60px 60px repeat({gwColumns.length}, minmax(40px,1fr)) 56px 36px;">
-						<span>Player</span>
-						<span class="text-center">Pos</span>
-						<span class="text-right">Price</span>
-						<span class="text-center">Fixture</span>
-						{#each gwColumns as gw}
-							<span class="text-center">GW{gw}</span>
-						{/each}
-						<span class="text-right">TWxP</span>
-						<span></span>
-					</div>
+					<!-- LIST VIEW -->
+					<section class="list-view">
+						<div class="list-header" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+							<span>Player</span>
+							<span class="text-center">Pos</span>
+							<span class="text-right">Price</span>
+							{#each gwColumns as gw}
+								<span class="text-center">GW{gw}</span>
+							{/each}
+							<span class="text-right">TWxP</span>
+							<span></span>
+						</div>
 
-					<!-- Starting XI -->
-					<div class="px-2 pt-1 pb-2">
-						{#each starting11 as player}
-							<div class="group grid items-center gap-x-2 px-3 py-2 rounded-xl hover:bg-[var(--color-surface-3)]/40 transition-colors"
-								style="grid-template-columns: 2.5fr 52px 60px 60px repeat({gwColumns.length}, minmax(40px,1fr)) 56px 36px;">
-								<!-- Player name + team badge -->
-								<div class="flex items-center gap-2 min-w-0">
-									<img src={teamBadgeUrl(player.team_code)} alt="" class="w-5 h-5 flex-shrink-0" />
-									<a href="/player/{player.element_id}" class="font-medium text-sm truncate hover:text-[var(--color-accent-light)] transition-colors">
-										{player.web_name}
-									</a>
-								</div>
-								<!-- Position badge -->
-								<div class="flex justify-center">
-									<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded {positionBg(player.element_type)}">
-										{POSITIONS[player.element_type]}
-									</span>
-								</div>
-								<!-- Price (current + selling) -->
-								<div class="text-right">
-									<span class="font-mono text-xs">{formatPrice(player.current_price)}</span>
-									<span class="font-mono text-[10px] text-[var(--color-text-3)] ml-0.5">({formatPrice(player.selling_price)})</span>
-								</div>
-								<!-- Next fixture (placeholder) -->
-								<div class="flex justify-center">
-									<span class="text-xs text-[var(--color-text-3)] font-mono">--</span>
-								</div>
-								<!-- GW expected points -->
-								{#each gwColumns as gw}
-									<div class="text-center font-mono text-xs text-[var(--color-text-1)]">
-										{getPlayerGwPts(player, gw)}
+						<!-- Starting XI -->
+						<div class="list-body">
+							{#each starting11 as player}
+								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+									<div class="flex items-center gap-2 min-w-0">
+										<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4 flex-shrink-0" />
+										<a href="/player/{player.element_id}" class="text-xs font-medium truncate hover:text-[var(--color-accent-light)]">
+											{player.web_name}
+										</a>
 									</div>
-								{/each}
-								<!-- TWxP -->
-								<div class="text-right font-mono text-sm font-semibold text-[var(--color-accent-light)]">
-									{calculatePlayerTWxP(player.projections).toFixed(1)}
-								</div>
-								<!-- Transfer out button -->
-								<div class="flex justify-center">
-									<button
-										onclick={() => startTransferOut(player)}
-										disabled={transferMode}
-										class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-[var(--color-fall-bg)] text-[var(--color-text-3)] hover:text-[var(--color-fall)] disabled:cursor-not-allowed"
-										title="Transfer out"
-									>
-										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4m0 0l6-6m-6 6l6 6"/></svg>
-									</button>
-								</div>
-							</div>
-						{/each}
-					</div>
-
-					<!-- Bench separator -->
-					<div class="mx-5 border-t border-dashed border-[var(--color-surface-4)] my-1"></div>
-					<div class="px-5 py-1.5">
-						<span class="text-[10px] text-[var(--color-text-3)] uppercase tracking-wider font-semibold">Bench</span>
-					</div>
-
-					<!-- Bench -->
-					<div class="px-2 pb-3 opacity-70">
-						{#each bench as player}
-							<div class="group grid items-center gap-x-2 px-3 py-1.5 rounded-xl hover:bg-[var(--color-surface-3)]/30 transition-colors"
-								style="grid-template-columns: 2.5fr 52px 60px 60px repeat({gwColumns.length}, minmax(40px,1fr)) 56px 36px;">
-								<!-- Player name + team badge -->
-								<div class="flex items-center gap-2 min-w-0">
-									<img src={teamBadgeUrl(player.team_code)} alt="" class="w-5 h-5 flex-shrink-0" />
-									<a href="/player/{player.element_id}" class="text-sm truncate hover:text-[var(--color-accent-light)] transition-colors">
-										{player.web_name}
-									</a>
-								</div>
-								<!-- Position badge -->
-								<div class="flex justify-center">
-									<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded {positionBg(player.element_type)}">
-										{POSITIONS[player.element_type]}
-									</span>
-								</div>
-								<!-- Price -->
-								<div class="text-right">
-									<span class="font-mono text-xs">{formatPrice(player.current_price)}</span>
-									<span class="font-mono text-[10px] text-[var(--color-text-3)] ml-0.5">({formatPrice(player.selling_price)})</span>
-								</div>
-								<!-- Fixture placeholder -->
-								<div class="flex justify-center">
-									<span class="text-xs text-[var(--color-text-3)] font-mono">--</span>
-								</div>
-								<!-- GW pts -->
-								{#each gwColumns as gw}
-									<div class="text-center font-mono text-xs text-[var(--color-text-2)]">
-										{getPlayerGwPts(player, gw)}
+									<div class="flex justify-center">
+										<span class="pos-badge {positionBg(player.element_type)}">{POSITIONS[player.element_type]}</span>
 									</div>
-								{/each}
-								<!-- TWxP -->
-								<div class="text-right font-mono text-sm text-[var(--color-text-2)]">
-									{calculatePlayerTWxP(player.projections).toFixed(1)}
+									<div class="text-right font-mono text-[10px]">{formatPrice(player.current_price)}</div>
+									{#each gwColumns as gw}
+										<div class="text-center font-mono text-[10px] text-[var(--color-text-1)]">
+											{getPlayerGwPts(player, gw)}
+										</div>
+									{/each}
+									<div class="text-right font-mono text-[11px] font-semibold text-[var(--color-accent-light)]">
+										{calculatePlayerTWxP(player.projections).toFixed(1)}
+									</div>
+									<div class="flex justify-center">
+										<button
+											onclick={() => startTransferOut(player)}
+											disabled={transferMode}
+											class="list-transfer-btn"
+											title="Transfer out"
+										>
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4m0 0l6-6m-6 6l6 6"/></svg>
+										</button>
+									</div>
 								</div>
-								<!-- Transfer out button -->
-								<div class="flex justify-center">
-									<button
-										onclick={() => startTransferOut(player)}
-										disabled={transferMode}
-										class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-[var(--color-fall-bg)] text-[var(--color-text-3)] hover:text-[var(--color-fall)] disabled:cursor-not-allowed"
-										title="Transfer out"
-									>
-										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4m0 0l6-6m-6 6l6 6"/></svg>
-									</button>
+							{/each}
+						</div>
+
+						<!-- Bench separator -->
+						<div class="list-bench-sep">
+							<span>Bench</span>
+						</div>
+
+						<div class="list-body list-body--bench">
+							{#each bench as player}
+								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+									<div class="flex items-center gap-2 min-w-0">
+										<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4 flex-shrink-0" />
+										<a href="/player/{player.element_id}" class="text-xs truncate hover:text-[var(--color-accent-light)]">
+											{player.web_name}
+										</a>
+									</div>
+									<div class="flex justify-center">
+										<span class="pos-badge {positionBg(player.element_type)}">{POSITIONS[player.element_type]}</span>
+									</div>
+									<div class="text-right font-mono text-[10px]">{formatPrice(player.current_price)}</div>
+									{#each gwColumns as gw}
+										<div class="text-center font-mono text-[10px] text-[var(--color-text-2)]">
+											{getPlayerGwPts(player, gw)}
+										</div>
+									{/each}
+									<div class="text-right font-mono text-[11px] text-[var(--color-text-2)]">
+										{calculatePlayerTWxP(player.projections).toFixed(1)}
+									</div>
+									<div class="flex justify-center">
+										<button
+											onclick={() => startTransferOut(player)}
+											disabled={transferMode}
+											class="list-transfer-btn"
+											title="Transfer out"
+										>
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4m0 0l6-6m-6 6l6 6"/></svg>
+										</button>
+									</div>
 								</div>
-							</div>
-						{/each}
-					</div>
-		</section>
-		{/if}
+							{/each}
+						</div>
+					</section>
+				{/if}
 			</div>
 
-			<!-- RIGHT: Player search panel (always visible) -->
-			<aside class="hidden lg:block w-72 flex-shrink-0">
-				<div class="sticky top-20 space-y-3">
-					<div class="rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-surface-4)] p-3">
-						<input
-							type="text"
-							placeholder="Search players…"
-							bind:value={searchQuery}
-							class="w-full px-3 py-2 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] text-sm"
-						/>
-						{#if transferOutPlayer}
-							<div class="mt-2 text-xs text-[var(--color-text-2)]">
-								Budget: <span class="font-mono text-[var(--color-text-0)]">{formatPrice(workingBank + transferOutPlayer.selling_price)}</span>
-							</div>
-						{/if}
-					</div>
-
-					<!-- Results -->
-					<div class="rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-surface-4)] overflow-hidden max-h-[calc(100vh-12rem)] overflow-y-auto">
-						{#if searchResults.length > 0}
-							{#each searchResults as player}
-								<button
-									onclick={() => completeTransfer(player)}
-									disabled={!transferOutPlayer}
-									class="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-surface-3)] transition-colors text-left border-b border-[var(--color-surface-4)]/50 last:border-0 disabled:opacity-40 disabled:cursor-not-allowed"
-								>
-									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-6 h-8 flex-shrink-0" />
-									<div class="flex-1 min-w-0">
-										<div class="text-xs font-medium truncate">{player.web_name}</div>
-										<div class="text-[10px] text-[var(--color-text-3)]">{player.team_short} · {POSITIONS[player.element_type]} · {formatPrice(player.now_cost)}</div>
+			<!-- RIGHT: Permanent Panel -->
+			<aside class="main-right">
+				<div class="panel-sticky">
+					{#if transferOutPlayer}
+						<!-- ─── TRANSFER MODE: Player info + search ─── -->
+						<div class="panel-card">
+							<div class="panel-selected-player">
+								<img
+									src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{transferOutPlayer.team_code}{transferOutPlayer.element_type === 1 ? '_1' : ''}-66.webp"
+									alt=""
+									class="panel-player-shirt"
+								/>
+								<div class="panel-player-info">
+									<h3 class="font-semibold text-sm text-[var(--color-text-0)]">{transferOutPlayer.web_name}</h3>
+									<div class="panel-player-meta">
+										<span class="pos-badge pos-badge--sm {positionBg(transferOutPlayer.element_type)}">{POSITIONS[transferOutPlayer.element_type]}</span>
+										<span>{transferOutPlayer.team_short}</span>
+										<span class="font-mono">{formatPrice(transferOutPlayer.current_price)}</span>
 									</div>
-									<div class="text-right flex-shrink-0">
-										<div class="font-mono text-[10px] text-[var(--color-accent-light)]">{calculatePlayerTWxP(player.projections || []).toFixed(1)}</div>
-									</div>
+								</div>
+								<button onclick={cancelTransfer} class="panel-close-btn">
+									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
 								</button>
+							</div>
+							<div class="panel-player-stats">
+								<div class="panel-stat">
+									<span class="panel-stat-value font-mono">{formatPrice(transferOutPlayer.selling_price)}</span>
+									<span class="panel-stat-label">Sell</span>
+								</div>
+								<div class="panel-stat">
+									<span class="panel-stat-value font-mono text-[var(--color-accent-light)]">{calculatePlayerTWxP(transferOutPlayer.projections).toFixed(1)}</span>
+									<span class="panel-stat-label">TWxP</span>
+								</div>
+								<div class="panel-stat">
+									<span class="panel-stat-value font-mono">{formatPrice(workingBank + transferOutPlayer.selling_price)}</span>
+									<span class="panel-stat-label">Budget</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Search input -->
+						<div class="panel-card">
+							<input
+								type="text"
+								placeholder="Search replacement..."
+								bind:value={searchQuery}
+								class="panel-search-input"
+							/>
+						</div>
+
+						<!-- Search results -->
+						<div class="panel-results">
+							{#if searchResults.length > 0}
+								{#each searchResults as player}
+									<button onclick={() => completeTransfer(player)} class="panel-result-row">
+										<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="panel-result-shirt" />
+										<div class="flex-1 min-w-0">
+											<div class="text-xs font-medium truncate text-[var(--color-text-0)]">{player.web_name}</div>
+											<div class="text-[10px] text-[var(--color-text-3)]">{player.team_short} · {POSITIONS[player.element_type]}</div>
+										</div>
+										<div class="text-right flex-shrink-0">
+											<div class="font-mono text-[10px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
+											<div class="font-mono text-[10px] text-[var(--color-accent-light)]">{calculatePlayerTWxP(player.projections || []).toFixed(1)}</div>
+										</div>
+									</button>
+								{/each}
+							{:else if searchQuery.length >= 2 && allPlayersLoaded}
+								<div class="panel-empty">No players within budget</div>
+							{:else if searchQuery.length < 2}
+								<div class="panel-empty">Type to search replacements</div>
+							{:else if !allPlayersLoaded}
+								<div class="panel-empty">Loading player database...</div>
+							{/if}
+						</div>
+					{:else}
+						<!-- ─── IDLE MODE: Squad summary ─── -->
+						<div class="panel-card">
+							<h3 class="font-display font-semibold text-sm mb-3 text-[var(--color-text-0)]">Squad Summary</h3>
+							<div class="panel-summary-grid">
+								<div class="panel-summary-item">
+									<span class="panel-summary-value font-mono">{starting11.filter(p => p.element_type === 2).length}-{starting11.filter(p => p.element_type === 3).length}-{starting11.filter(p => p.element_type === 4).length}</span>
+									<span class="panel-summary-label">Formation</span>
+								</div>
+								<div class="panel-summary-item">
+									<span class="panel-summary-value font-mono">{formatPrice(squadData.squad_value)}</span>
+									<span class="panel-summary-label">Total Value</span>
+								</div>
+								<div class="panel-summary-item">
+									<span class="panel-summary-value font-mono text-[var(--color-accent-light)]">{workingTWxP.toFixed(1)}</span>
+									<span class="panel-summary-label">Total TWxP</span>
+								</div>
+								<div class="panel-summary-item">
+									<span class="panel-summary-value font-mono">{formatPrice(workingBank)}</span>
+									<span class="panel-summary-label">In the Bank</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- TWxP by position breakdown -->
+						<div class="panel-card">
+							<h4 class="text-[10px] uppercase tracking-wider text-[var(--color-text-3)] font-semibold mb-2">TWxP by Position</h4>
+							{#each [
+								{ label: 'GKP', type: 1, color: 'var(--color-warning)' },
+								{ label: 'DEF', type: 2, color: '#10b981' },
+								{ label: 'MID', type: 3, color: '#6366f1' },
+								{ label: 'FWD', type: 4, color: '#ef4444' },
+							] as pos}
+								{@const posPlayers = workingSquad.filter(p => p.element_type === pos.type)}
+								{@const posTwxp = posPlayers.reduce((sum, p) => sum + calculatePlayerTWxP(p.projections), 0)}
+								<div class="panel-pos-row">
+									<span class="panel-pos-label" style="color: {pos.color}">{pos.label}</span>
+									<div class="panel-pos-bar">
+										<div class="panel-pos-bar-fill" style="width: {Math.min(100, (posTwxp / Math.max(workingTWxP, 1)) * 100)}%; background: {pos.color}"></div>
+									</div>
+									<span class="panel-pos-value font-mono">{posTwxp.toFixed(1)}</span>
+								</div>
 							{/each}
-						{:else if searchQuery.length >= 2 && allPlayersLoaded}
-							<div class="p-4 text-center text-[var(--color-text-2)] text-xs">
-								{transferOutPlayer ? 'No players within budget' : 'Select a player first'}
-							</div>
-						{:else if searchQuery.length < 2}
-							<div class="p-4 text-center text-[var(--color-text-3)] text-xs">
-								{transferOutPlayer ? 'Type to search replacements' : 'Tap a player on the pitch, then search here'}
-							</div>
-						{:else if !allPlayersLoaded}
-							<div class="p-4 text-center text-[var(--color-text-2)] text-xs">Loading…</div>
-						{/if}
-					</div>
+						</div>
+
+						<div class="panel-hint">
+							<svg class="w-4 h-4 text-[var(--color-text-3)]" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
+							<span>Tap a player on the pitch to explore transfers</span>
+						</div>
+					{/if}
 				</div>
 			</aside>
 		</div>
@@ -839,28 +861,26 @@
 		     COMPARISON VIEW
 		     ═══════════════════════════════════════════════════════════════ -->
 		{#if savedOptions.length > 0}
-			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-5 space-y-5">
-				<div class="flex items-center justify-between">
+			<section class="comparison-section">
+				<div class="comparison-header">
 					<h2 class="font-display font-semibold text-lg">Compare Options</h2>
-					<span class="text-[var(--color-text-3)] text-xs">{savedOptions.length} option{savedOptions.length > 1 ? 's' : ''} saved</span>
+					<span class="text-[var(--color-text-3)] text-[10px]">{savedOptions.length} option{savedOptions.length > 1 ? 's' : ''} saved</span>
 				</div>
 
-				<div class="grid gap-4 lg:grid-cols-{Math.min(comparisonData.length, 3)}">
+				<div class="comparison-grid">
 					{#each comparisonData as item, i}
-						<div class="rounded-xl bg-[var(--color-surface-3)]/40 p-4 space-y-3 {item.verdict?.worth ? 'ring-1 ring-[var(--color-rise)]/30' : ''}">
-							<!-- Option header -->
-							<div class="flex items-center justify-between">
+						<div class="comparison-card {item.verdict?.worth ? 'comparison-card--worth' : ''}">
+							<div class="comparison-card-header">
 								<h3 class="font-semibold text-sm">{item.name}</h3>
 								{#if i > 0}
-									<button onclick={() => deleteOption(i - 1)} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] text-xs p-1">✕</button>
+									<button onclick={() => deleteOption(i - 1)} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] text-xs p-1 leading-none">✕</button>
 								{/if}
 							</div>
 
-							<!-- Transfers list -->
 							{#if item.transfers.length > 0}
-								<div class="space-y-1">
+								<div class="space-y-1 mb-3">
 									{#each item.transfers as t}
-										<div class="flex items-center gap-2 text-xs">
+										<div class="flex items-center gap-1.5 text-[10px]">
 											<span class="text-[var(--color-fall)]">{t.out.web_name}</span>
 											<span class="text-[var(--color-text-3)]">→</span>
 											<span class="text-[var(--color-rise)]">{t.in.web_name}</span>
@@ -868,43 +888,39 @@
 									{/each}
 								</div>
 							{:else}
-								<p class="text-[var(--color-text-2)] text-xs italic">Baseline — no changes</p>
+								<p class="text-[var(--color-text-3)] text-[10px] italic mb-3">No changes (baseline)</p>
 							{/if}
 
-							<!-- Stats -->
-							<div class="grid grid-cols-3 gap-2 text-center pt-2 border-t border-[var(--color-surface-4)]">
+							<div class="comparison-stats">
 								<div>
 									<div class="font-mono text-sm font-semibold">{item.twxp.toFixed(1)}</div>
-									<div class="text-[9px] text-[var(--color-text-3)] uppercase">TWxP</div>
+									<div class="text-[8px] text-[var(--color-text-3)] uppercase">TWxP</div>
 								</div>
 								<div>
 									<div class="font-mono text-sm font-semibold {item.cost > 0 ? 'text-[var(--color-fall)]' : ''}">{item.cost > 0 ? `-${item.cost}` : '0'}</div>
-									<div class="text-[9px] text-[var(--color-text-3)] uppercase">Cost</div>
+									<div class="text-[8px] text-[var(--color-text-3)] uppercase">Cost</div>
 								</div>
 								<div>
 									<div class="font-mono text-sm font-semibold {item.netGain > 0 ? 'text-[var(--color-rise)]' : item.netGain < 0 ? 'text-[var(--color-fall)]' : ''}">
 										{item.netGain > 0 ? '+' : ''}{item.netGain.toFixed(1)}
 									</div>
-									<div class="text-[9px] text-[var(--color-text-3)] uppercase">Net Gain</div>
+									<div class="text-[8px] text-[var(--color-text-3)] uppercase">Net</div>
 								</div>
 							</div>
 
-							<!-- Bar -->
-							<div class="h-2 rounded-full overflow-hidden bg-[var(--color-surface-4)]">
+							<div class="comparison-bar">
 								<div
-									class="h-full rounded-full transition-all duration-700 {i === 0 ? 'bg-[var(--color-surface-4)]' : item.verdict?.worth ? 'bg-[var(--color-rise)]' : 'bg-[var(--color-fall)]/60'}"
+									class="comparison-bar-fill {i === 0 ? 'comparison-bar-fill--base' : item.verdict?.worth ? 'comparison-bar-fill--worth' : 'comparison-bar-fill--hold'}"
 									style="width: {item.barWidth}%"
 								></div>
 							</div>
 
-							<!-- Verdict -->
 							{#if item.verdict}
-								<div class="flex items-center gap-2">
-									<span class="text-xs px-2.5 py-1 rounded-full font-medium
-										{item.verdict.worth ? 'bg-[var(--color-rise-bg)] text-[var(--color-rise)]' : 'bg-[var(--color-fall-bg)] text-[var(--color-fall)]'}">
+								<div class="comparison-verdict">
+									<span class="comparison-verdict-badge {item.verdict.worth ? 'comparison-verdict-badge--worth' : 'comparison-verdict-badge--hold'}">
 										{item.verdict.worth ? '✓ Worth it' : '✗ Hold'}
 									</span>
-									<span class="text-[var(--color-text-2)] text-[10px] flex-1">{item.verdict.reason}</span>
+									<span class="text-[var(--color-text-2)] text-[9px] leading-tight">{item.verdict.reason}</span>
 								</div>
 							{/if}
 						</div>
@@ -916,16 +932,889 @@
 		<!-- ═══════════════════════════════════════════════════════════════
 		     FOOTER
 		     ═══════════════════════════════════════════════════════════════ -->
-		<div class="flex items-center justify-between pt-2">
+		<footer class="page-footer">
 			<button
 				onclick={() => { squadData = null; managerId = ''; savedOptions = []; currentTransfers = []; declaredTransfers = []; }}
-				class="text-[var(--color-text-2)] text-sm hover:text-[var(--color-text-0)] transition-colors"
+				class="footer-back"
 			>
 				← Load different team
 			</button>
-			<span class="text-[var(--color-text-3)] text-xs">
-				TWxP uses {DECAY} decay over 8 GWs · BCV threshold {BCV_THRESHOLD}
+			<span class="text-[var(--color-text-3)] text-[10px] font-mono">
+				decay={DECAY} · bcv_threshold={BCV_THRESHOLD}
 			</span>
-		</div>
-	{/if}
-</div>
+		</footer>
+	</div>
+{/if}
+
+<style>
+	/* ═══════════════════════════════════════════════════════════
+	   PAGE SHELL
+	   ═══════════════════════════════════════════════════════════ */
+	.page-shell {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		max-width: 1440px;
+		margin: 0 auto;
+		padding: 0 0 2rem;
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   LOADER
+	   ═══════════════════════════════════════════════════════════ */
+	.loader-container {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 70vh;
+	}
+
+	.loader-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 3rem 2.5rem;
+		border-radius: 20px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+		box-shadow:
+			0 0 0 1px var(--color-surface-4),
+			0 20px 60px -12px rgba(0, 0, 0, 0.5),
+			0 0 80px -20px rgba(99, 102, 241, 0.08);
+		max-width: 420px;
+		width: 100%;
+	}
+
+	.loader-icon {
+		margin-bottom: 1.5rem;
+		opacity: 0.6;
+	}
+
+	.loader-input-group {
+		display: flex;
+		gap: 10px;
+		width: 100%;
+	}
+
+	.loader-input {
+		flex: 1;
+		padding: 14px 18px;
+		border-radius: 12px;
+		background: var(--color-surface-0);
+		border: 1px solid var(--color-surface-4);
+		color: var(--color-text-0);
+		font-family: var(--font-mono);
+		font-size: 14px;
+	}
+
+	.loader-input::placeholder {
+		color: var(--color-text-3);
+	}
+
+	.loader-input:focus {
+		outline: none;
+		border-color: var(--color-accent);
+		box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+	}
+
+	.loader-btn {
+		padding: 14px 24px;
+		border-radius: 12px;
+		background: var(--color-accent);
+		color: white;
+		font-weight: 600;
+		font-size: 14px;
+		border: none;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.loader-btn:hover {
+		background: var(--color-accent-light);
+	}
+
+	.loader-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   TOP BAR
+	   ═══════════════════════════════════════════════════════════ */
+	.top-bar {
+		border-radius: 14px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+		padding: 14px 20px;
+		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+	}
+
+	.top-bar-inner {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	@media (min-width: 1024px) {
+		.top-bar-inner {
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+		}
+	}
+
+	.top-bar-team {
+		min-width: 0;
+	}
+
+	.top-bar-meta {
+		font-size: 12px;
+		color: var(--color-text-2);
+		margin-top: 2px;
+	}
+
+	.top-bar-stats {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 16px;
+	}
+
+	@media (min-width: 1024px) {
+		.top-bar-stats {
+			gap: 24px;
+		}
+	}
+
+	.stat-cell {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+	}
+
+	.stat-value {
+		font-size: 16px;
+		font-weight: 600;
+		color: var(--color-text-0);
+	}
+
+	.stat-label {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-3);
+	}
+
+	.stat-select {
+		background: var(--color-surface-3);
+		border: 1px solid var(--color-surface-4);
+		border-radius: 8px;
+		padding: 4px 10px;
+		font-family: var(--font-mono);
+		font-size: 13px;
+		color: var(--color-text-0);
+	}
+
+	.stat-select:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   DECLARE SECTION
+	   ═══════════════════════════════════════════════════════════ */
+	.declare-section {
+		border-radius: 12px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+		overflow: hidden;
+	}
+
+	.declare-toggle {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 12px 16px;
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--color-text-1);
+	}
+
+	.declare-toggle:hover {
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.declare-icon {
+		color: var(--color-warning);
+		font-size: 14px;
+	}
+
+	.declare-title {
+		font-family: var(--font-display);
+		font-weight: 600;
+		font-size: 12px;
+	}
+
+	.declare-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: var(--color-accent);
+		color: white;
+		font-size: 9px;
+		font-weight: 700;
+		margin-left: 6px;
+	}
+
+	.declare-chevron {
+		color: var(--color-text-3);
+		transition: transform 0.2s ease;
+	}
+
+	.declare-body {
+		padding: 0 16px 14px;
+		border-top: 1px solid var(--color-surface-4);
+		padding-top: 12px;
+	}
+
+	.declare-player-list {
+		max-height: 180px;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.declare-player-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 8px;
+		border-radius: 8px;
+		background: none;
+		border: none;
+		cursor: pointer;
+		width: 100%;
+		text-align: left;
+		color: var(--color-text-1);
+	}
+
+	.declare-player-row:hover {
+		background: var(--color-surface-3);
+	}
+
+	.declare-add-btn {
+		padding: 8px 14px;
+		border-radius: 8px;
+		background: var(--color-surface-3);
+		border: 1px solid var(--color-surface-4);
+		color: var(--color-text-2);
+		font-size: 11px;
+		cursor: pointer;
+	}
+
+	.declare-add-btn:hover {
+		background: var(--color-surface-4);
+		color: var(--color-text-0);
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   TRANSFER STRIP
+	   ═══════════════════════════════════════════════════════════ */
+	.transfers-strip {
+		border-radius: 12px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+		padding: 14px 16px;
+	}
+
+	.transfers-strip-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 10px;
+	}
+
+	.transfers-strip-list {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.transfer-pill {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 10px;
+		border-radius: 8px;
+		background: var(--color-surface-3);
+		border: 1px solid rgba(255, 255, 255, 0.03);
+	}
+
+	.transfer-pill--lg {
+		padding: 8px 12px;
+	}
+
+	.strip-btn {
+		padding: 5px 12px;
+		border-radius: 6px;
+		font-size: 11px;
+		font-weight: 600;
+		border: none;
+		cursor: pointer;
+	}
+
+	.strip-btn--accent {
+		background: var(--color-accent);
+		color: white;
+	}
+
+	.strip-btn--accent:hover {
+		background: var(--color-accent-light);
+	}
+
+	.strip-btn--ghost {
+		background: var(--color-surface-3);
+		color: var(--color-text-2);
+	}
+
+	.strip-btn--ghost:hover {
+		color: var(--color-fall);
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   MAIN SPLIT LAYOUT
+	   ═══════════════════════════════════════════════════════════ */
+	.main-split {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	@media (min-width: 1024px) {
+		.main-split {
+			flex-direction: row;
+			gap: 20px;
+		}
+	}
+
+	.main-left {
+		flex: 1;
+		min-width: 0;
+	}
+
+	@media (min-width: 1024px) {
+		.main-left {
+			flex: 0 0 62%;
+		}
+	}
+
+	.main-right {
+		width: 100%;
+	}
+
+	@media (min-width: 1024px) {
+		.main-right {
+			flex: 0 0 36%;
+			max-width: 380px;
+		}
+	}
+
+	.panel-sticky {
+		position: sticky;
+		top: 80px;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   VIEW TOGGLE
+	   ═══════════════════════════════════════════════════════════ */
+	.view-toggle-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 10px;
+	}
+
+	.view-toggle-pills {
+		display: flex;
+		gap: 2px;
+		background: var(--color-surface-3);
+		border-radius: 8px;
+		padding: 2px;
+	}
+
+	.view-pill {
+		padding: 5px 14px;
+		border-radius: 6px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--color-text-2);
+		background: none;
+		border: none;
+		cursor: pointer;
+	}
+
+	.view-pill:hover {
+		color: var(--color-text-0);
+	}
+
+	.view-pill--active {
+		background: var(--color-accent);
+		color: white;
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   LIST VIEW
+	   ═══════════════════════════════════════════════════════════ */
+	.list-view {
+		border-radius: 14px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+		overflow: hidden;
+	}
+
+	.list-header {
+		display: grid;
+		gap: 6px;
+		padding: 10px 14px;
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-3);
+		border-bottom: 1px solid var(--color-surface-4);
+		align-items: center;
+	}
+
+	.list-body {
+		padding: 4px 6px;
+	}
+
+	.list-body--bench {
+		opacity: 0.6;
+	}
+
+	.list-row {
+		display: grid;
+		gap: 6px;
+		padding: 7px 8px;
+		border-radius: 8px;
+		align-items: center;
+	}
+
+	.list-row:hover {
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.list-bench-sep {
+		margin: 4px 14px;
+		padding: 4px 0;
+		border-top: 1px dashed var(--color-surface-4);
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		color: var(--color-text-3);
+		font-weight: 600;
+	}
+
+	.list-transfer-btn {
+		opacity: 0;
+		padding: 4px;
+		border-radius: 6px;
+		border: none;
+		background: none;
+		color: var(--color-text-3);
+		cursor: pointer;
+	}
+
+	.list-row:hover .list-transfer-btn {
+		opacity: 1;
+	}
+
+	.list-transfer-btn:hover {
+		background: var(--color-fall-bg);
+		color: var(--color-fall);
+	}
+
+	.pos-badge {
+		font-size: 9px;
+		font-weight: 700;
+		padding: 1px 5px;
+		border-radius: 4px;
+	}
+
+	.pos-badge--sm {
+		font-size: 8px;
+		padding: 1px 4px;
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   RIGHT PANEL
+	   ═══════════════════════════════════════════════════════════ */
+	.panel-card {
+		padding: 14px;
+		border-radius: 12px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+	}
+
+	.panel-selected-player {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.panel-player-shirt {
+		width: 36px;
+		height: 44px;
+		object-fit: contain;
+		filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+	}
+
+	.panel-player-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.panel-player-meta {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 10px;
+		color: var(--color-text-2);
+		margin-top: 2px;
+	}
+
+	.panel-close-btn {
+		padding: 4px;
+		border-radius: 6px;
+		border: none;
+		background: none;
+		color: var(--color-text-3);
+		cursor: pointer;
+	}
+
+	.panel-close-btn:hover {
+		color: var(--color-fall);
+		background: var(--color-fall-bg);
+	}
+
+	.panel-player-stats {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 8px;
+		margin-top: 12px;
+		padding-top: 10px;
+		border-top: 1px solid var(--color-surface-4);
+	}
+
+	.panel-stat {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1px;
+	}
+
+	.panel-stat-value {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-text-0);
+	}
+
+	.panel-stat-label {
+		font-size: 8px;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--color-text-3);
+	}
+
+	.panel-search-input {
+		width: 100%;
+		padding: 10px 14px;
+		border-radius: 10px;
+		background: var(--color-surface-0);
+		border: 1px solid var(--color-surface-4);
+		color: var(--color-text-0);
+		font-size: 13px;
+	}
+
+	.panel-search-input::placeholder {
+		color: var(--color-text-3);
+	}
+
+	.panel-search-input:focus {
+		outline: none;
+		border-color: var(--color-accent);
+		box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+	}
+
+	.panel-results {
+		border-radius: 12px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+		overflow: hidden;
+		max-height: calc(100vh - 420px);
+		overflow-y: auto;
+	}
+
+	.panel-result-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		width: 100%;
+		text-align: left;
+		background: none;
+		border: none;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+		cursor: pointer;
+		color: inherit;
+	}
+
+	.panel-result-row:last-child {
+		border-bottom: none;
+	}
+
+	.panel-result-row:hover {
+		background: var(--color-surface-3);
+	}
+
+	.panel-result-shirt {
+		width: 24px;
+		height: 30px;
+		object-fit: contain;
+		flex-shrink: 0;
+	}
+
+	.panel-empty {
+		padding: 24px 16px;
+		text-align: center;
+		font-size: 11px;
+		color: var(--color-text-3);
+	}
+
+	/* ─── Panel Summary (idle mode) ─── */
+	.panel-summary-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+	}
+
+	.panel-summary-item {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
+	.panel-summary-value {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--color-text-0);
+	}
+
+	.panel-summary-label {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-3);
+	}
+
+	.panel-pos-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 6px;
+	}
+
+	.panel-pos-row:last-child {
+		margin-bottom: 0;
+	}
+
+	.panel-pos-label {
+		font-size: 10px;
+		font-weight: 700;
+		width: 28px;
+	}
+
+	.panel-pos-bar {
+		flex: 1;
+		height: 4px;
+		border-radius: 2px;
+		background: var(--color-surface-4);
+		overflow: hidden;
+	}
+
+	.panel-pos-bar-fill {
+		height: 100%;
+		border-radius: 2px;
+		transition: width 0.5s ease;
+		opacity: 0.7;
+	}
+
+	.panel-pos-value {
+		font-size: 10px;
+		color: var(--color-text-2);
+		width: 32px;
+		text-align: right;
+	}
+
+	.panel-hint {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 14px;
+		border-radius: 10px;
+		background: var(--color-surface-3);
+		border: 1px solid var(--color-surface-4);
+		font-size: 11px;
+		color: var(--color-text-2);
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   COMPARISON
+	   ═══════════════════════════════════════════════════════════ */
+	.comparison-section {
+		border-radius: 14px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+		padding: 20px;
+	}
+
+	.comparison-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 16px;
+	}
+
+	.comparison-grid {
+		display: grid;
+		gap: 14px;
+		grid-template-columns: 1fr;
+	}
+
+	@media (min-width: 768px) {
+		.comparison-grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
+	@media (min-width: 1280px) {
+		.comparison-grid {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
+
+	.comparison-card {
+		padding: 16px;
+		border-radius: 12px;
+		background: var(--color-surface-3);
+		border: 1px solid rgba(255, 255, 255, 0.03);
+	}
+
+	.comparison-card--worth {
+		border-color: rgba(16, 185, 129, 0.2);
+		box-shadow: 0 0 20px -8px rgba(16, 185, 129, 0.1);
+	}
+
+	.comparison-card-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 8px;
+	}
+
+	.comparison-stats {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 8px;
+		text-align: center;
+		padding: 10px 0;
+		border-top: 1px solid var(--color-surface-4);
+		border-bottom: 1px solid var(--color-surface-4);
+		margin-bottom: 10px;
+	}
+
+	.comparison-bar {
+		height: 5px;
+		border-radius: 3px;
+		background: var(--color-surface-4);
+		overflow: hidden;
+		margin-bottom: 10px;
+	}
+
+	.comparison-bar-fill {
+		height: 100%;
+		border-radius: 3px;
+		transition: width 0.6s ease;
+	}
+
+	.comparison-bar-fill--base {
+		background: var(--color-surface-4);
+	}
+
+	.comparison-bar-fill--worth {
+		background: var(--color-rise);
+	}
+
+	.comparison-bar-fill--hold {
+		background: var(--color-fall);
+		opacity: 0.6;
+	}
+
+	.comparison-verdict {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.comparison-verdict-badge {
+		font-size: 10px;
+		font-weight: 600;
+		padding: 3px 8px;
+		border-radius: 20px;
+		white-space: nowrap;
+	}
+
+	.comparison-verdict-badge--worth {
+		background: var(--color-rise-bg);
+		color: var(--color-rise);
+	}
+
+	.comparison-verdict-badge--hold {
+		background: var(--color-fall-bg);
+		color: var(--color-fall);
+	}
+
+	/* ═══════════════════════════════════════════════════════════
+	   FOOTER
+	   ═══════════════════════════════════════════════════════════ */
+	.page-footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-top: 8px;
+	}
+
+	.footer-back {
+		background: none;
+		border: none;
+		color: var(--color-text-2);
+		font-size: 12px;
+		cursor: pointer;
+	}
+
+	.footer-back:hover {
+		color: var(--color-text-0);
+	}
+</style>
