@@ -22,8 +22,11 @@
 	// --- Declared actual transfers ---
 	let declaredTransfers: { out: SquadPlayer; in: SquadPlayer }[] = $state([]);
 	let declareMode = $state(false);
-	let declareStep: 'select-out' | 'search-in' = $state('select-out');
+	let declareStep: 'select-out' | 'search-in' | 'confirm-prices' = $state('select-out');
 	let declareOutPlayer: SquadPlayer | null = $state(null);
+	let declareInPlayer: any = $state(null);
+	let declareSellPrice = $state('');
+	let declareBuyPrice = $state('');
 	let declareSearchQuery = $state('');
 	let declareSearching = $state(false);
 	let declaredSectionOpen = $state(false);
@@ -196,23 +199,39 @@
 
 	function completeDeclareTransfer(inPlayer: any) {
 		if (!declareOutPlayer) return;
-		const inSquadPlayer: SquadPlayer = {
-			element_id: inPlayer.element_id,
-			web_name: inPlayer.web_name,
-			element_type: inPlayer.element_type,
-			team_code: inPlayer.team_code,
-			team_short: inPlayer.team_short,
-			current_price: inPlayer.now_cost,
-			purchase_price: inPlayer.now_cost,
-			selling_price: inPlayer.now_cost,
-			projections: inPlayer.projections || [],
-			bcv: inPlayer.bcv,
+		// Move to price confirmation step
+		declareInPlayer = inPlayer;
+		declareSellPrice = (declareOutPlayer.selling_price / 10).toFixed(1);
+		declareBuyPrice = (inPlayer.now_cost / 10).toFixed(1);
+		declareStep = 'confirm-prices';
+	}
+
+	function confirmDeclareTransfer() {
+		if (!declareOutPlayer || !declareInPlayer) return;
+		const sellPrice = Math.round(parseFloat(declareSellPrice) * 10);
+		const buyPrice = Math.round(parseFloat(declareBuyPrice) * 10);
+
+		const outPlayer: SquadPlayer = {
+			...declareOutPlayer,
+			selling_price: sellPrice,
 		};
-		declaredTransfers = [...declaredTransfers, { out: declareOutPlayer, in: inSquadPlayer }];
+		const inSquadPlayer: SquadPlayer = {
+			element_id: declareInPlayer.element_id,
+			web_name: declareInPlayer.web_name,
+			element_type: declareInPlayer.element_type,
+			team_code: declareInPlayer.team_code,
+			team_short: declareInPlayer.team_short,
+			current_price: buyPrice,
+			purchase_price: buyPrice,
+			selling_price: buyPrice,
+			projections: declareInPlayer.projections || [],
+			bcv: declareInPlayer.bcv,
+		};
+		declaredTransfers = [...declaredTransfers, { out: outPlayer, in: inSquadPlayer }];
 		declareMode = false;
 		declareOutPlayer = null;
+		declareInPlayer = null;
 		declareSearchQuery = '';
-		// Reset planned transfers when base changes
 		currentTransfers = [];
 	}
 
@@ -659,6 +678,34 @@
 									<p class="text-[var(--color-text-3)] text-[10px]">No players found.</p>
 								{/if}
 								<button onclick={cancelDeclare} class="text-[var(--color-text-3)] text-[10px] hover:text-[var(--color-text-1)]">Cancel</button>
+							</div>
+						{:else if declareStep === 'confirm-prices' && declareOutPlayer && declareInPlayer}
+							<div class="space-y-3">
+								<p class="text-[var(--color-text-1)] text-xs font-medium">Confirm transfer prices</p>
+								<div class="flex items-center gap-2 text-xs">
+									<span class="text-[var(--color-fall)]">{declareOutPlayer.web_name}</span>
+									<span class="text-[var(--color-text-3)]">→</span>
+									<span class="text-[var(--color-rise)]">{declareInPlayer.web_name}</span>
+								</div>
+								<div class="flex gap-3">
+									<div class="flex-1">
+										<label class="text-[9px] text-[var(--color-text-3)] uppercase tracking-wider block mb-1">Sold for (£m)</label>
+										<input type="number" step="0.1" bind:value={declareSellPrice}
+											class="w-full px-2 py-1.5 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] font-mono text-xs focus:outline-none focus:border-[var(--color-accent)]" />
+									</div>
+									<div class="flex-1">
+										<label class="text-[9px] text-[var(--color-text-3)] uppercase tracking-wider block mb-1">Bought for (£m)</label>
+										<input type="number" step="0.1" bind:value={declareBuyPrice}
+											class="w-full px-2 py-1.5 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] font-mono text-xs focus:outline-none focus:border-[var(--color-accent)]" />
+									</div>
+								</div>
+								<div class="flex gap-2">
+									<button onclick={confirmDeclareTransfer}
+										class="px-3 py-1.5 rounded bg-[var(--color-accent)] text-white text-xs font-medium hover:bg-[var(--color-accent-light)]">
+										Confirm
+									</button>
+									<button onclick={cancelDeclare} class="text-[var(--color-text-3)] text-xs hover:text-[var(--color-text-1)]">Cancel</button>
+								</div>
 							</div>
 						{/if}
 					{:else}
