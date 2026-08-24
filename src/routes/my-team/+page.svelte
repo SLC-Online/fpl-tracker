@@ -261,12 +261,26 @@
 			// Deselect
 			deselectPlayer();
 		} else {
-			// Swap the two players (substitution)
+			// Swap the two players (substitution) — validate formation first
 			const idx1 = workingSquadRaw.findIndex(p => p.element_id === selectedPlayer!.element_id);
 			const idx2 = workingSquadRaw.findIndex(p => p.element_id === player.element_id);
 			if (idx1 !== -1 && idx2 !== -1) {
+				// Check if swap would create invalid formation
 				const newSquad = [...workingSquadRaw];
 				[newSquad[idx1], newSquad[idx2]] = [newSquad[idx2], newSquad[idx1]];
+				const newStarting = newSquad.slice(0, 11);
+				const gkCount = newStarting.filter(p => p.element_type === 1).length;
+				const defCount = newStarting.filter(p => p.element_type === 2).length;
+				const midCount = newStarting.filter(p => p.element_type === 3).length;
+				const fwdCount = newStarting.filter(p => p.element_type === 4).length;
+
+				// FPL constraints: 1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD
+				if (gkCount !== 1 || defCount < 3 || defCount > 5 || midCount < 2 || midCount > 5 || fwdCount < 1 || fwdCount > 3) {
+					// Invalid formation — don't allow
+					deselectPlayer();
+					return;
+				}
+
 				manualSquadOrder = newSquad.map(p => p.element_id);
 			}
 			deselectPlayer();
@@ -713,11 +727,8 @@
 					{#if selectedPlayer}
 						<span class="text-[10px] text-[var(--color-accent-light)]">
 							<strong class="font-semibold">{selectedPlayer.web_name}</strong> selected
-							<span class="text-[var(--color-text-3)] ml-1">· tap squad player to swap, or pick from list to transfer</span>
 							<button onclick={deselectPlayer} class="ml-1.5 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
 						</span>
-					{:else}
-						<span class="text-[var(--color-text-3)] text-[10px] hidden sm:block">Tap a player to select</span>
 					{/if}
 				</div>
 
@@ -1388,7 +1399,7 @@
 
 	@media (min-width: 1024px) {
 		.main-left {
-			flex: 0 0 62%;
+			flex: 0 0 55%;
 		}
 	}
 
@@ -1398,15 +1409,14 @@
 
 	@media (min-width: 1024px) {
 		.main-right {
-			flex: 0 0 36%;
-			max-width: 380px;
+			flex: 0 0 43%;
+			max-width: 450px;
 		}
 	}
 
 	.panel-sticky {
 		position: sticky;
 		top: 76px;
-		padding-top: 46px;  /* Match view toggle bar height so tops align */
 		display: flex;
 		flex-direction: column;
 		gap: 10px;

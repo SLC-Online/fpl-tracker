@@ -27,7 +27,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		.from('player_snapshots')
 		.select(`
 			element_id, now_cost, form, total_points, points_per_game,
-			selected_by_percent, ep_next, status, news,
+			selected_by_percent, ep_next, ep_this, status, news,
+			transfers_in_event, transfers_out_event,
+			expected_goals, expected_assists, expected_goal_involvements,
+			minutes, goals_scored, assists, clean_sheets,
 			players!inner(web_name, first_name, second_name, code, element_type, team_id,
 				teams!inner(short_name, code, name))
 		`)
@@ -129,8 +132,18 @@ export const GET: RequestHandler = async ({ url }) => {
 				points_per_game: p.points_per_game,
 				selected_by_percent: p.selected_by_percent,
 				ep_next: p.ep_next,
+				ep_this: p.ep_this,
 				status: p.status,
 				news: p.news,
+				transfers_in_event: p.transfers_in_event,
+				transfers_out_event: p.transfers_out_event,
+				expected_goals: p.expected_goals,
+				expected_assists: p.expected_assists,
+				expected_goal_involvements: p.expected_goal_involvements,
+				minutes: p.minutes,
+				goals_scored: p.goals_scored,
+				assists: p.assists,
+				clean_sheets: p.clean_sheets,
 				projections: projMap.get(p.element_id) || [],
 				bcv: bcvMap.get(p.element_id) ?? null,
 			};
