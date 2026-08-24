@@ -35,8 +35,8 @@
 			<defs>
 				<!-- Pitch grass stripe pattern -->
 				<pattern id="grassStripes" x="0" y="0" width="680" height="200" patternUnits="userSpaceOnUse">
-					<rect x="0" y="0" width="680" height="100" fill="rgba(255,255,255,0.012)" />
-					<rect x="0" y="100" width="680" height="100" fill="rgba(0,0,0,0.015)" />
+					<rect x="0" y="0" width="680" height="100" fill="rgba(255,255,255,0.03)" />
+					<rect x="0" y="100" width="680" height="100" fill="rgba(0,0,0,0.03)" />
 				</pattern>
 				<!-- Vignette radial gradient -->
 				<radialGradient id="pitchVignette" cx="50%" cy="50%" r="70%">
@@ -47,7 +47,7 @@
 			</defs>
 
 			<!-- Base pitch color -->
-			<rect x="0" y="0" width="680" height="1000" fill="#163024" />
+			<rect x="0" y="0" width="680" height="1000" fill="#1b5e20" />
 			<!-- Grass stripes -->
 			<rect x="0" y="0" width="680" height="1000" fill="url(#grassStripes)" />
 
@@ -215,7 +215,7 @@
 		width: 100%;
 		border-radius: 16px;
 		overflow: hidden;
-		background: #163024;
+		background: #1b5e20;
 		box-shadow:
 			0 0 0 1px rgba(255, 255, 255, 0.04),
 			0 20px 60px -12px rgba(0, 0, 0, 0.6),
@@ -284,7 +284,7 @@
 	}
 
 	.player-node--bench {
-		opacity: 0.55;
+		opacity: 0.8;
 	}
 
 	.player-node--bench:hover {

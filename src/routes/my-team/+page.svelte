@@ -36,6 +36,7 @@
 	let searchQuery = $state('');
 	let filterTeam = $state('');
 	let filterPos = $state('');
+	let sortBy: 'twxp' | 'price' | 'form' | 'points' = $state('twxp');
 
 	// --- Helpers ---
 	function formatPrice(cost: number): string {
@@ -275,7 +276,13 @@
 				}
 				return true;
 			})
-			.sort((a, b) => calculatePlayerTWxP(b.projections || []) - calculatePlayerTWxP(a.projections || []))
+			.sort((a, b) => {
+				if (sortBy === 'twxp') return calculatePlayerTWxP(b.projections || []) - calculatePlayerTWxP(a.projections || []);
+				if (sortBy === 'price') return b.now_cost - a.now_cost;
+				if (sortBy === 'form') return parseFloat(b.form || '0') - parseFloat(a.form || '0');
+				if (sortBy === 'points') return (b.total_points || 0) - (a.total_points || 0);
+				return 0;
+			})
 			.slice(0, 40);
 	});
 
@@ -820,6 +827,20 @@
 
 						<!-- Search results (auto-populated) -->
 						<div class="panel-results">
+							<!-- Sort & results header -->
+							<div class="flex items-center justify-between px-3 py-2 border-b border-[var(--color-surface-4)]">
+								<span class="text-[9px] text-[var(--color-text-3)] uppercase tracking-wider">{searchResults.length} players</span>
+								<div class="flex items-center gap-1">
+									<span class="text-[9px] text-[var(--color-text-3)]">Sort:</span>
+									<select bind:value={sortBy}
+										class="bg-transparent text-[9px] text-[var(--color-text-1)] font-medium focus:outline-none cursor-pointer">
+										<option value="twxp">TWxP</option>
+										<option value="price">Price</option>
+										<option value="form">Form</option>
+										<option value="points">Points</option>
+									</select>
+								</div>
+							</div>
 							{#if searchResults.length > 0}
 								{#each searchResults as player}
 									<button onclick={() => completeTransfer(player)} class="panel-result-row">
@@ -830,7 +851,7 @@
 										</div>
 										<div class="text-right flex-shrink-0">
 											<div class="font-mono text-[10px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
-											<div class="font-mono text-[10px] text-[var(--color-accent-light)]">{calculatePlayerTWxP(player.projections || []).toFixed(1)}</div>
+											<div class="font-mono text-[10px] text-[var(--color-accent-light)]" title="Time-Weighted Expected Points">{calculatePlayerTWxP(player.projections || []).toFixed(1)} <span class="text-[var(--color-text-3)]">xP</span></div>
 										</div>
 									</button>
 								{/each}
@@ -1368,10 +1389,12 @@
 
 	.panel-sticky {
 		position: sticky;
-		top: 80px;
+		top: 76px;
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
+		max-height: calc(100vh - 92px);
+		overflow-y: auto;
 	}
 
 	/* ═══════════════════════════════════════════════════════════
