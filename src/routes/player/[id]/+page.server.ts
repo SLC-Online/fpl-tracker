@@ -51,10 +51,19 @@ export const load: PageServerLoad = async ({ params }) => {
 		.limit(1)
 		.single();
 
+	// Get next GW (for offset calculation)
+	const { data: nextEvent } = await supabase
+		.from('events')
+		.select('event_id')
+		.eq('is_next', true)
+		.limit(1)
+		.single();
+
 	return {
 		player,
 		timeline: timeline || [],
 		priceChanges: priceChanges || [],
-		csvData
+		csvData,
+		nextGw: nextEvent?.event_id || 2,
 	};
 };
