@@ -186,11 +186,14 @@
 	{/if}
 
 	<!-- Chart -->
-	{#if data.timeline.length >= 2}
+	<!-- Price Chart (only shown if there have been price changes) -->
+	{#if data.priceChanges.length > 0 && data.timeline.length >= 2}
 		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
 			<h2 class="font-display font-semibold text-lg mb-4">Price History</h2>
 			<div bind:this={chartContainer}></div>
 		</section>
+	{:else if data.timeline.length >= 2}
+		<!-- No price changes yet, don't show a flat useless line -->
 	{:else}
 		<div class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-10 text-center">
 			<p class="text-[var(--color-text-2)]">Collecting data — charts appear after more snapshots.</p>

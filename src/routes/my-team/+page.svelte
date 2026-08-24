@@ -898,7 +898,16 @@
 						<span class="w-7"></span>
 						<span class="flex-1">Player</span>
 						<button onclick={() => sortBy = 'price'} class="w-12 text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">Price</button>
-						<button onclick={() => sortBy = 'twxp'} class="w-14 text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'twxp' || sortBy === 'ep_next' ? 'text-[var(--color-accent-light)]' : ''}">{sortBy === 'ep_next' ? 'xP Next' : 'xPts'}</button>
+						<button onclick={() => sortBy = sortBy === 'twxp' ? 'ep_next' : 'twxp'} class="w-14 text-right cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
+							{#if sortBy === 'twxp'}xPts
+							{:else if sortBy === 'ep_next'}xP Next
+							{:else if sortBy === 'form'}Form
+							{:else if sortBy === 'points'}Pts
+							{:else if sortBy === 'transfers_in'}TI
+							{:else if sortBy === 'xg'}xG
+							{:else}{sortBy}
+							{/if}
+						</button>
 					</div>
 
 					<!-- Player list -->
