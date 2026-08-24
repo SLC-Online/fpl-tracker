@@ -6,24 +6,46 @@
 		DECAY, BCV_THRESHOLD, type SquadPlayer, type TransferOption
 	} from '$lib/transfer-engine';
 
+	// --- Squad loader state ---
 	let managerId = $state('');
 	let loading = $state(false);
 	let errorMsg = $state('');
 	let squadData: any = $state(null);
 
-	// Transfer planner state
-	let options: TransferOption[] = $state([]);
-	let activeOptionIdx = $state(-1);  // -1 = viewing base squad
-	let showComparison = $state(false);
+	// --- Top bar state ---
 	let freeTransfers = $state(1);
 
-	// Transfer-in search
+	// --- Declared actual transfers ---
+	let declaredTransfers: { out: SquadPlayer; in: SquadPlayer }[] = $state([]);
+	let declareMode = $state(false);
+	let declareStep: 'select-out' | 'search-in' = $state('select-out');
+	let declareOutPlayer: SquadPlayer | null = $state(null);
+	let declareSearchQuery = $state('');
+	let declareSearchResults: any[] = $state([]);
+	let declareSearching = $state(false);
+	let declaredSectionOpen = $state(false);
+
+	// --- Transfer planner state ---
+	let savedOptions: TransferOption[] = $state([]);
+	let currentTransfers: { out: SquadPlayer; in: SquadPlayer }[] = $state([]);
 	let transferMode = $state(false);
 	let transferOutPlayer: SquadPlayer | null = $state(null);
 	let searchQuery = $state('');
 	let searchResults: any[] = $state([]);
 	let searching = $state(false);
 
+	// --- Helpers ---
+	function formatPrice(cost: number): string {
+		return `£${(cost / 10).toFixed(1)}`;
+	}
+
+	function formatRank(rank: number): string {
+		if (rank >= 1_000_000) return `${(rank / 1_000_000).toFixed(1)}m`;
+		if (rank >= 1_000) return `${(rank / 1_000).toFixed(0)}k`;
+		return rank.toLocaleString();
+	}
+
+	// --- Squad loading ---
 	async function loadSquad() {
 		if (!managerId.trim()) return;
 		loading = true;
@@ -35,8 +57,10 @@
 				return;
 			}
 			squadData = await resp.json();
-			options = [];
-			activeOptionIdx = -1;
+			declaredTransfers = [];
+			savedOptions = [];
+			currentTransfers = [];
+			freeTransfers = 1;
 		} catch (e: any) {
 			errorMsg = e.message;
 		} finally {
@@ -44,12 +68,8 @@
 		}
 	}
 
-	function formatPrice(cost: number): string {
-		return `£${(cost / 10).toFixed(1)}`;
-	}
-
-	// Base squad as SquadPlayer[]
-	let baseSquad = $derived<SquadPlayer[]>(
+	// --- Base squad from raw API (before declared transfers) ---
+	let rawSquad = $derived<SquadPlayer[]>(
 		(squadData?.squad || []).map((p: any) => ({
 			element_id: p.element_id,
 			web_name: p.web_name,
@@ -63,76 +83,106 @@
 			bcv: null,
 		}))
 	);
+	let rawBank = $derived(squadData?.bank || 0);
 
-	let baseBank = $derived(squadData?.bank || 0);
+	// --- Adjusted squad (after declared actual transfers) ---
+	let baseSquad = $derived.by(() => {
+		if (declaredTransfers.length === 0) return rawSquad;
+		const { squad } = applyTransfers(rawSquad, rawBank, declaredTransfers);
+		return squad;
+	});
+
+	let baseBank = $derived.by(() => {
+		if (declaredTransfers.length === 0) return rawBank;
+		const { bank } = applyTransfers(rawSquad, rawBank, declaredTransfers);
+		return bank;
+	});
+
 	let baseTWxP = $derived(calculateSquadTWxP(baseSquad));
 
-	// Currently displayed squad (base or option)
-	let displaySquad = $derived.by(() => {
-		if (activeOptionIdx >= 0 && options[activeOptionIdx]) {
-			return options[activeOptionIdx].resultSquad;
-		}
-		return baseSquad;
+	// --- Working squad (base + planned current transfers) ---
+	let workingSquad = $derived.by(() => {
+		if (currentTransfers.length === 0) return baseSquad;
+		const { squad } = applyTransfers(baseSquad, baseBank, currentTransfers);
+		return squad;
 	});
 
-	let displayBank = $derived.by(() => {
-		if (activeOptionIdx >= 0 && options[activeOptionIdx]) {
-			return options[activeOptionIdx].bank;
-		}
-		return baseBank;
+	let workingBank = $derived.by(() => {
+		if (currentTransfers.length === 0) return baseBank;
+		const { bank } = applyTransfers(baseSquad, baseBank, currentTransfers);
+		return bank;
 	});
 
-	let displayTWxP = $derived.by(() => {
-		if (activeOptionIdx >= 0 && options[activeOptionIdx]) {
-			return options[activeOptionIdx].twxp;
+	let workingTWxP = $derived(calculateSquadTWxP(workingSquad));
+
+	let transferCost = $derived(transferPointsCost(currentTransfers.length, freeTransfers));
+
+	// --- Squad display (starting XI / bench) ---
+	let starting11 = $derived(workingSquad.filter((_, i) => i < 11));
+	let bench = $derived(workingSquad.filter((_, i) => i >= 11));
+
+	// --- GW columns ---
+	let gwColumns = $derived.by(() => {
+		const gws = new Set<number>();
+		for (const p of workingSquad) {
+			for (const proj of (p.projections || [])) {
+				gws.add(proj.gw);
+			}
 		}
-		return baseTWxP;
+		return [...gws].sort((a, b) => a - b).slice(0, 5);
 	});
 
-	let starting11 = $derived(displaySquad.slice(0, 11));
-	let bench = $derived(displaySquad.slice(11));
-
-	// Start a transfer: click a player to sell
-	function startTransferOut(player: SquadPlayer) {
-		transferOutPlayer = player;
-		transferMode = true;
-		searchQuery = '';
-		searchResults = [];
+	function getPlayerGwPts(player: SquadPlayer, gw: number): string {
+		const proj = (player.projections || []).find(p => p.gw === gw);
+		return proj ? proj.pts.toFixed(1) : '--';
 	}
 
-	// Search for replacement players
-	let searchTimeout: any;
-	function onSearchInput() {
-		clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(() => searchPlayers(), 300);
+	// --- Declare actual transfers ---
+	function startDeclareTransfer() {
+		declareMode = true;
+		declareStep = 'select-out';
+		declareOutPlayer = null;
+		declareSearchQuery = '';
+		declareSearchResults = [];
 	}
 
-	async function searchPlayers() {
-		if (!transferOutPlayer || searchQuery.length < 2) {
-			searchResults = [];
+	function selectDeclareOut(player: SquadPlayer) {
+		declareOutPlayer = player;
+		declareStep = 'search-in';
+		declareSearchQuery = '';
+		declareSearchResults = [];
+	}
+
+	let declareSearchTimeout: any;
+	function onDeclareSearchInput() {
+		clearTimeout(declareSearchTimeout);
+		declareSearchTimeout = setTimeout(() => searchDeclarePlayer(), 300);
+	}
+
+	async function searchDeclarePlayer() {
+		if (!declareOutPlayer || declareSearchQuery.length < 2) {
+			declareSearchResults = [];
 			return;
 		}
-		searching = true;
-
-		const maxBudget = displayBank + transferOutPlayer.selling_price;
-		const excludeIds = displaySquad.map(p => p.element_id).join(',');
-
+		declareSearching = true;
+		const currentSquadIds = rawSquad
+			.filter(p => !declaredTransfers.some(t => t.out.element_id === p.element_id))
+			.map(p => p.element_id)
+			.join(',');
 		try {
 			const resp = await fetch(
-				`/api/players?q=${encodeURIComponent(searchQuery)}&pos=${transferOutPlayer.element_type}&max_price=${maxBudget}&exclude=${excludeIds}`
+				`/api/players?q=${encodeURIComponent(declareSearchQuery)}&pos=${declareOutPlayer.element_type}&max_price=300&exclude=${currentSquadIds}`
 			);
 			if (resp.ok) {
-				searchResults = await resp.json();
+				declareSearchResults = await resp.json();
 			}
 		} finally {
-			searching = false;
+			declareSearching = false;
 		}
 	}
 
-	// Complete a transfer: select the incoming player
-	function completeTransfer(inPlayer: any) {
-		if (!transferOutPlayer) return;
-
+	function completeDeclareTransfer(inPlayer: any) {
+		if (!declareOutPlayer) return;
 		const inSquadPlayer: SquadPlayer = {
 			element_id: inPlayer.element_id,
 			web_name: inPlayer.web_name,
@@ -145,40 +195,75 @@
 			projections: inPlayer.projections || [],
 			bcv: inPlayer.bcv,
 		};
+		declaredTransfers = [...declaredTransfers, { out: declareOutPlayer, in: inSquadPlayer }];
+		declareMode = false;
+		declareOutPlayer = null;
+		declareSearchQuery = '';
+		declareSearchResults = [];
+		// Reset planned transfers when base changes
+		currentTransfers = [];
+	}
 
-		// If we're editing an existing option, add to it
-		if (activeOptionIdx >= 0) {
-			const opt = options[activeOptionIdx];
-			opt.transfers.push({ out: transferOutPlayer, in: inSquadPlayer });
-			const { squad, bank } = applyTransfers(baseSquad, baseBank, opt.transfers);
-			opt.resultSquad = squad;
-			opt.bank = bank;
-			opt.twxp = calculateSquadTWxP(squad);
-			opt.twxpDelta = opt.twxp - baseTWxP;
-			opt.cost = transferPointsCost(opt.transfers.length, freeTransfers);
-			opt.netGain = opt.twxpDelta - opt.cost;
-			options = [...options];
-		} else {
-			// Create new option
-			const transfers = [{ out: transferOutPlayer, in: inSquadPlayer }];
-			const { squad, bank } = applyTransfers(baseSquad, baseBank, transfers);
-			const twxp = calculateSquadTWxP(squad);
-			const newOption: TransferOption = {
-				id: crypto.randomUUID(),
-				name: `Option ${options.length + 1}`,
-				transfers,
-				resultSquad: squad,
-				bank,
-				twxp,
-				twxpDelta: twxp - baseTWxP,
-				cost: transferPointsCost(1, freeTransfers),
-				netGain: (twxp - baseTWxP) - transferPointsCost(1, freeTransfers),
-			};
-			options = [...options, newOption];
-			activeOptionIdx = options.length - 1;
+	function removeDeclaredTransfer(idx: number) {
+		declaredTransfers = declaredTransfers.filter((_, i) => i !== idx);
+		currentTransfers = [];
+	}
+
+	function cancelDeclare() {
+		declareMode = false;
+		declareOutPlayer = null;
+	}
+
+	// --- Transfer planner ---
+	function startTransferOut(player: SquadPlayer) {
+		if (transferMode) return;
+		transferOutPlayer = player;
+		transferMode = true;
+		searchQuery = '';
+		searchResults = [];
+	}
+
+	let searchTimeout: any;
+	function onSearchInput() {
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => searchPlayers(), 300);
+	}
+
+	async function searchPlayers() {
+		if (!transferOutPlayer || searchQuery.length < 2) {
+			searchResults = [];
+			return;
 		}
+		searching = true;
+		const maxBudget = workingBank + transferOutPlayer.selling_price;
+		const excludeIds = workingSquad.map(p => p.element_id).join(',');
+		try {
+			const resp = await fetch(
+				`/api/players?q=${encodeURIComponent(searchQuery)}&pos=${transferOutPlayer.element_type}&max_price=${maxBudget}&exclude=${excludeIds}`
+			);
+			if (resp.ok) {
+				searchResults = await resp.json();
+			}
+		} finally {
+			searching = false;
+		}
+	}
 
-		// Reset transfer mode
+	function completeTransfer(inPlayer: any) {
+		if (!transferOutPlayer) return;
+		const inSquadPlayer: SquadPlayer = {
+			element_id: inPlayer.element_id,
+			web_name: inPlayer.web_name,
+			element_type: inPlayer.element_type,
+			team_code: inPlayer.team_code,
+			team_short: inPlayer.team_short,
+			current_price: inPlayer.now_cost,
+			purchase_price: inPlayer.now_cost,
+			selling_price: inPlayer.now_cost,
+			projections: inPlayer.projections || [],
+			bcv: inPlayer.bcv,
+		};
+		currentTransfers = [...currentTransfers, { out: transferOutPlayer, in: inSquadPlayer }];
 		transferMode = false;
 		transferOutPlayer = null;
 		searchQuery = '';
@@ -192,261 +277,612 @@
 		searchResults = [];
 	}
 
-	function viewBaseSquad() {
-		activeOptionIdx = -1;
+	function removeCurrentTransfer(idx: number) {
+		currentTransfers = currentTransfers.filter((_, i) => i !== idx);
 	}
 
-	function viewOption(idx: number) {
-		activeOptionIdx = idx;
+	function resetTransfers() {
+		currentTransfers = [];
+		transferMode = false;
+		transferOutPlayer = null;
+	}
+
+	function saveAsOption() {
+		if (currentTransfers.length === 0) return;
+		const { squad, bank } = applyTransfers(baseSquad, baseBank, currentTransfers);
+		const twxp = calculateSquadTWxP(squad);
+		const cost = transferPointsCost(currentTransfers.length, freeTransfers);
+		const newOption: TransferOption = {
+			id: crypto.randomUUID(),
+			name: `Option ${String.fromCharCode(65 + savedOptions.length)}`,
+			transfers: [...currentTransfers],
+			resultSquad: squad,
+			bank,
+			twxp,
+			twxpDelta: twxp - baseTWxP,
+			cost,
+			netGain: (twxp - baseTWxP) - cost,
+		};
+		savedOptions = [...savedOptions, newOption];
+		currentTransfers = [];
 	}
 
 	function deleteOption(idx: number) {
-		options = options.filter((_, i) => i !== idx);
-		if (activeOptionIdx === idx) activeOptionIdx = -1;
-		else if (activeOptionIdx > idx) activeOptionIdx--;
+		savedOptions = savedOptions.filter((_, i) => i !== idx);
 	}
 
-	function toggleComparison() {
-		showComparison = !showComparison;
-	}
-
-	// Comparison: calculate relative bars (all options + base add up to visual comparison)
+	// --- Comparison ---
 	let comparisonData = $derived.by(() => {
 		const all = [
-			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as any[] },
-			...options.map(o => ({ name: o.name, twxp: o.twxp, cost: o.cost, netGain: o.netGain, transfers: o.transfers }))
+			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as any[], verdict: null as any },
+			...savedOptions.map(o => ({
+				name: o.name,
+				twxp: o.twxp,
+				cost: o.cost,
+				netGain: o.netGain,
+				transfers: o.transfers,
+				verdict: isTransferWorthIt(o, freeTransfers),
+			}))
 		];
 		const maxTwxp = Math.max(...all.map(a => a.twxp));
 		const minTwxp = Math.min(...all.map(a => a.twxp));
 		const range = maxTwxp - minTwxp || 1;
-
 		return all.map(a => ({
 			...a,
-			barWidth: 30 + ((a.twxp - minTwxp) / range) * 70,  // 30-100% width
-			verdict: a.transfers.length > 0 ? isTransferWorthIt(a as any, freeTransfers) : null,
+			barWidth: 30 + ((a.twxp - minTwxp) / range) * 70,
 		}));
 	});
+
+	// Position color helper
+	function positionBg(elementType: number): string {
+		const colors: Record<number, string> = {
+			1: 'bg-amber-500/15 text-amber-400',
+			2: 'bg-emerald-500/15 text-emerald-400',
+			3: 'bg-blue-500/15 text-blue-400',
+			4: 'bg-red-500/15 text-red-400',
+		};
+		return colors[elementType] || '';
+	}
+
+	// Fixture difficulty color (placeholder - ready for real data)
+	function fixtureDifficultyClass(_difficulty: number): string {
+		const classes: Record<number, string> = {
+			1: 'text-emerald-400 bg-emerald-500/10',
+			2: 'text-emerald-300 bg-emerald-500/5',
+			3: 'text-[var(--color-text-1)]',
+			4: 'text-orange-400 bg-orange-500/10',
+			5: 'text-red-400 bg-red-500/10',
+		};
+		return classes[_difficulty] || 'text-[var(--color-text-2)]';
+	}
 </script>
 
 <svelte:head>
 	<title>My Team — FPL Tracker</title>
 </svelte:head>
 
-<div class="space-y-8">
-	<header>
-		<h1 class="font-display font-bold text-3xl tracking-tight">My Team</h1>
-	</header>
-
+<div class="space-y-6">
 	{#if !squadData}
-		<!-- Squad Loader -->
-		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-8 max-w-lg">
-			<h2 class="font-display font-semibold text-lg mb-4">Load your squad</h2>
-			<p class="text-[var(--color-text-2)] text-sm mb-5">
-				Enter your FPL Manager ID — the number in your FPL URL when you click "Points".
-			</p>
-			<div class="flex gap-3">
-				<input type="text" placeholder="e.g. 1234567" bind:value={managerId}
-					onkeydown={(e) => { if (e.key === 'Enter') loadSquad(); }}
-					class="flex-1 px-4 py-2.5 rounded-xl bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)]" />
-				<button onclick={loadSquad} disabled={loading || !managerId.trim()}
-					class="px-6 py-2.5 rounded-xl bg-[var(--color-accent)] text-white font-medium hover:bg-[var(--color-accent-light)] disabled:opacity-50">
-					{loading ? 'Loading...' : 'Load'}
-				</button>
-			</div>
-			{#if errorMsg}<p class="text-[var(--color-fall)] text-sm mt-3">{errorMsg}</p>{/if}
-		</section>
-	{:else}
-		<!-- Manager Header -->
-		<section class="flex flex-wrap items-center justify-between gap-4">
-			<div>
-				<h2 class="font-display font-semibold text-xl">{squadData.manager.team_name}</h2>
-				<p class="text-[var(--color-text-2)] text-sm">
-					{squadData.manager.name} · GW{squadData.gameweek} · {squadData.total_points} pts
+		<!-- ═══════════════════════════════════════════════════════════════
+		     SQUAD LOADER
+		     ═══════════════════════════════════════════════════════════════ -->
+		<div class="flex items-center justify-center min-h-[60vh]">
+			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-8 w-full max-w-md">
+				<h1 class="font-display font-bold text-2xl mb-2">Transfer Planner</h1>
+				<p class="text-[var(--color-text-2)] text-sm mb-6 leading-relaxed">
+					Enter your FPL Manager ID to load your squad. You can find it in the URL when viewing your team on the
+					<a href="https://fantasy.premierleague.com" target="_blank" class="text-[var(--color-accent-light)] hover:underline">FPL website</a>
+					— it's the number after <code class="font-mono text-xs bg-[var(--color-surface-3)] px-1.5 py-0.5 rounded">/entry/</code>
 				</p>
+				<div class="flex gap-3">
+					<input
+						type="text"
+						placeholder="e.g. 1234567"
+						bind:value={managerId}
+						onkeydown={(e) => { if (e.key === 'Enter') loadSquad(); }}
+						class="flex-1 px-4 py-3 rounded-xl bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] font-mono placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/30"
+					/>
+					<button
+						onclick={loadSquad}
+						disabled={loading || !managerId.trim()}
+						class="px-6 py-3 rounded-xl bg-[var(--color-accent)] text-white font-semibold hover:bg-[var(--color-accent-light)] disabled:opacity-40 disabled:cursor-not-allowed"
+					>
+						{loading ? 'Loading…' : 'Load'}
+					</button>
+				</div>
+				{#if errorMsg}
+					<p class="text-[var(--color-fall)] text-sm mt-4">{errorMsg}</p>
+				{/if}
+			</section>
+		</div>
+	{:else}
+		<!-- ═══════════════════════════════════════════════════════════════
+		     TOP BAR
+		     ═══════════════════════════════════════════════════════════════ -->
+		<header class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-5">
+			<div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+				<!-- Left: Team info -->
+				<div class="min-w-0">
+					<h1 class="font-display font-bold text-xl lg:text-2xl truncate">{squadData.manager.team_name}</h1>
+					<p class="text-[var(--color-text-2)] text-sm mt-0.5">
+						{squadData.manager.name} · GW{squadData.gameweek} · Rank {formatRank(squadData.manager.overall_rank)}
+					</p>
+				</div>
+				<!-- Right: Key stats -->
+				<div class="flex flex-wrap items-center gap-4 lg:gap-6">
+					<!-- Free Transfers -->
+					<div class="text-center">
+						<select
+							bind:value={freeTransfers}
+							class="bg-[var(--color-surface-3)] border border-[var(--color-surface-4)] rounded-lg px-3 py-1.5 font-mono text-sm text-[var(--color-text-0)] focus:outline-none focus:border-[var(--color-accent)]"
+						>
+							<option value={1}>1 FT</option>
+							<option value={2}>2 FT</option>
+							<option value={3}>3 FT</option>
+							<option value={15}>WC</option>
+						</select>
+						<div class="text-[var(--color-text-3)] text-[10px] mt-1 uppercase tracking-wider">Free Transfers</div>
+					</div>
+					<!-- Bank -->
+					<div class="text-center">
+						<div class="font-mono text-lg font-semibold">{formatPrice(workingBank)}</div>
+						<div class="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider">Bank</div>
+					</div>
+					<!-- Squad Value -->
+					<div class="text-center">
+						<div class="font-mono text-lg font-semibold">{formatPrice(squadData.squad_value)}</div>
+						<div class="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider">Squad Value</div>
+					</div>
+					<!-- Transfer Cost -->
+					<div class="text-center">
+						<div class="font-mono text-lg font-semibold {transferCost > 0 ? 'text-[var(--color-fall)]' : 'text-[var(--color-rise)]'}">
+							{transferCost > 0 ? `-${transferCost}` : '0'} pts
+						</div>
+						<div class="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider">Transfer Cost</div>
+					</div>
+					<!-- TWxP -->
+					<div class="text-center">
+						<div class="font-mono text-lg font-semibold text-[var(--color-accent-light)]">{workingTWxP.toFixed(1)}</div>
+						<div class="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider">TWxP</div>
+					</div>
+				</div>
 			</div>
-			<div class="flex gap-5">
-				<div class="text-right">
-					<div class="font-mono text-lg font-semibold">{formatPrice(displayBank)}</div>
-					<div class="text-[var(--color-text-2)] text-xs">Bank</div>
+		</header>
+
+		<!-- ═══════════════════════════════════════════════════════════════
+		     DECLARE ACTUAL TRANSFERS
+		     ═══════════════════════════════════════════════════════════════ -->
+		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
+			<button
+				onclick={() => declaredSectionOpen = !declaredSectionOpen}
+				class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[var(--color-surface-3)]/30"
+			>
+				<div class="flex items-center gap-3">
+					<span class="text-[var(--color-warning)] text-lg">⚠</span>
+					<div>
+						<h2 class="font-display font-semibold text-sm">Declare Actual Transfers</h2>
+						<p class="text-[var(--color-text-2)] text-xs mt-0.5">
+							Made transfers since last deadline? Declare them here to update your base squad.
+						</p>
+					</div>
 				</div>
-				<div class="text-right">
-					<div class="font-mono text-lg font-semibold text-[var(--color-accent)]">{displayTWxP.toFixed(1)}</div>
-					<div class="text-[var(--color-text-2)] text-xs">TWxP (8wk)</div>
+				<span class="text-[var(--color-text-2)] text-sm transition-transform {declaredSectionOpen ? 'rotate-180' : ''}">▾</span>
+			</button>
+
+			{#if declaredSectionOpen}
+				<div class="px-5 pb-5 border-t border-[var(--color-surface-4)] pt-4 space-y-3">
+					<!-- Declared transfers list -->
+					{#if declaredTransfers.length > 0}
+						<div class="space-y-2">
+							{#each declaredTransfers as t, i}
+								<div class="flex items-center gap-3 px-3 py-2 rounded-xl bg-[var(--color-surface-3)]/50 text-sm">
+									<img src={teamBadgeUrl(t.out.team_code)} alt="" class="w-4 h-4" />
+									<span class="text-[var(--color-fall)]">{t.out.web_name}</span>
+									<span class="text-[var(--color-text-3)]">→</span>
+									<img src={teamBadgeUrl(t.in.team_code)} alt="" class="w-4 h-4" />
+									<span class="text-[var(--color-rise)]">{t.in.web_name}</span>
+									<span class="font-mono text-xs text-[var(--color-text-2)] ml-auto">{formatPrice(t.in.current_price)}</span>
+									<button onclick={() => removeDeclaredTransfer(i)} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] ml-2 text-xs">✕</button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+
+					{#if declareMode}
+						{#if declareStep === 'select-out'}
+							<div class="space-y-2">
+								<p class="text-[var(--color-text-1)] text-sm font-medium">Who did you sell?</p>
+								<div class="max-h-48 overflow-y-auto space-y-1">
+									{#each rawSquad.filter(p => !declaredTransfers.some(t => t.out.element_id === p.element_id)) as player}
+										<button
+											onclick={() => selectDeclareOut(player)}
+											class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-left text-sm"
+										>
+											<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4" />
+											<span>{player.web_name}</span>
+											<span class="text-[var(--color-text-3)] text-xs ml-auto">{POSITIONS[player.element_type]}</span>
+											<span class="font-mono text-xs text-[var(--color-text-2)]">{formatPrice(player.selling_price)}</span>
+										</button>
+									{/each}
+								</div>
+								<button onclick={cancelDeclare} class="text-[var(--color-text-2)] text-xs hover:text-[var(--color-text-0)]">Cancel</button>
+							</div>
+						{:else if declareStep === 'search-in' && declareOutPlayer}
+							<div class="space-y-2">
+								<p class="text-[var(--color-text-1)] text-sm font-medium">
+									Sold <span class="text-[var(--color-fall)]">{declareOutPlayer.web_name}</span> — who did you buy?
+								</p>
+								<input
+									type="text"
+									placeholder="Search replacement..."
+									bind:value={declareSearchQuery}
+									oninput={onDeclareSearchInput}
+									class="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] text-sm"
+								/>
+								{#if declareSearchResults.length > 0}
+									<div class="max-h-48 overflow-y-auto space-y-1">
+										{#each declareSearchResults as player}
+											<button
+												onclick={() => completeDeclareTransfer(player)}
+												class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--color-surface-3)] transition-colors text-left text-sm"
+											>
+												<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4" />
+												<span class="flex-1">{player.web_name}</span>
+												<span class="text-[var(--color-text-3)] text-xs">{player.team_short}</span>
+												<span class="font-mono text-xs">{formatPrice(player.now_cost)}</span>
+											</button>
+										{/each}
+									</div>
+								{:else if declareSearchQuery.length >= 2 && !declareSearching}
+									<p class="text-[var(--color-text-2)] text-xs">No players found.</p>
+								{/if}
+								<button onclick={cancelDeclare} class="text-[var(--color-text-2)] text-xs hover:text-[var(--color-text-0)]">Cancel</button>
+							</div>
+						{/if}
+					{:else}
+						<button
+							onclick={startDeclareTransfer}
+							class="px-4 py-2 rounded-lg bg-[var(--color-surface-3)] text-sm text-[var(--color-text-1)] hover:bg-[var(--color-surface-4)] hover:text-[var(--color-text-0)]"
+						>
+							+ Declare a transfer
+						</button>
+					{/if}
 				</div>
-				<div class="text-right">
-					<label class="text-[var(--color-text-2)] text-xs block mb-0.5">Free transfers</label>
-					<select bind:value={freeTransfers} class="bg-[var(--color-surface-3)] border border-[var(--color-surface-4)] rounded-lg px-2 py-1 text-sm font-mono">
-						<option value={1}>1</option>
-						<option value={2}>2</option>
-						<option value={3}>3</option>
-						<option value={5}>5 (WC)</option>
-					</select>
-				</div>
-			</div>
+			{/if}
 		</section>
 
-		<!-- Option Tabs -->
-		<div class="flex flex-wrap gap-2">
-			<button onclick={viewBaseSquad}
-				class="px-4 py-2 rounded-lg text-sm font-medium transition-all
-					{activeOptionIdx === -1 ? 'bg-[var(--color-surface-3)] text-[var(--color-text-0)]' : 'text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)]'}">
-				Current
-			</button>
-			{#each options as opt, i}
-				<div class="flex items-center gap-1">
-					<button onclick={() => viewOption(i)}
-						class="px-4 py-2 rounded-lg text-sm font-medium transition-all
-							{activeOptionIdx === i ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface-2)] text-[var(--color-text-1)] hover:bg-[var(--color-surface-3)]'}">
-						{opt.name}
-						<span class="ml-1 opacity-70">({opt.transfers.length})</span>
-					</button>
-					<button onclick={() => deleteOption(i)} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] text-xs px-1">✕</button>
-				</div>
-			{/each}
-			{#if options.length > 0}
-				<button onclick={toggleComparison}
-					class="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--color-surface-2)] text-[var(--color-accent)] hover:bg-[var(--color-accent-glow)] border border-[var(--color-accent)]/30">
-					Compare
-				</button>
-			{/if}
-		</div>
-
-		<!-- Comparison View -->
-		{#if showComparison && options.length > 0}
-			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6 space-y-4">
-				<h3 class="font-display font-semibold text-lg">Comparison</h3>
-				{#each comparisonData as item, i}
-					<div class="space-y-1.5">
-						<div class="flex items-center justify-between">
-							<span class="text-sm font-medium">{item.name}</span>
-							<div class="flex items-center gap-3">
-								<span class="font-mono text-sm">{item.twxp.toFixed(1)} TWxP</span>
-								{#if item.cost > 0}
-									<span class="text-[var(--color-fall)] text-xs font-mono">-{item.cost}pts</span>
-								{/if}
-								{#if item.verdict}
-									<span class="text-xs px-2 py-0.5 rounded-full
-										{item.verdict.worth ? 'bg-[var(--color-rise-bg)] text-[var(--color-rise)]' : 'bg-[var(--color-fall-bg)] text-[var(--color-fall)]'}">
-										{item.verdict.worth ? '✓ Worth it' : '✗ Hold'}
-									</span>
-								{/if}
-							</div>
-						</div>
-						<div class="h-8 rounded-lg overflow-hidden bg-[var(--color-surface-3)]">
-							<div class="h-full rounded-lg transition-all duration-500
-								{i === 0 ? 'bg-[var(--color-surface-4)]' : item.verdict?.worth ? 'bg-[var(--color-rise)]' : 'bg-[var(--color-accent)]'}"
-								style="width: {item.barWidth}%">
-							</div>
-						</div>
-						{#if item.verdict}
-							<p class="text-[var(--color-text-2)] text-xs">{item.verdict.reason}</p>
-						{/if}
+		<!-- ═══════════════════════════════════════════════════════════════
+		     PLANNED TRANSFERS (current working set)
+		     ═══════════════════════════════════════════════════════════════ -->
+		{#if currentTransfers.length > 0}
+			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-5 space-y-3">
+				<div class="flex items-center justify-between">
+					<h2 class="font-display font-semibold text-sm">Planned Transfers</h2>
+					<div class="flex gap-2">
+						<button
+							onclick={saveAsOption}
+							class="px-3 py-1.5 rounded-lg bg-[var(--color-accent)] text-white text-xs font-medium hover:bg-[var(--color-accent-light)]"
+						>
+							Save as Option {String.fromCharCode(65 + savedOptions.length)}
+						</button>
+						<button
+							onclick={resetTransfers}
+							class="px-3 py-1.5 rounded-lg bg-[var(--color-surface-3)] text-[var(--color-text-2)] text-xs font-medium hover:text-[var(--color-fall)]"
+						>
+							Reset
+						</button>
 					</div>
-				{/each}
+				</div>
+				<div class="space-y-2">
+					{#each currentTransfers as t, i}
+						<div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[var(--color-surface-3)]/50 text-sm">
+							<img src={teamBadgeUrl(t.out.team_code)} alt="" class="w-5 h-5" />
+							<span class="text-[var(--color-fall)] font-medium">{t.out.web_name}</span>
+							<span class="font-mono text-xs text-[var(--color-text-3)]">{formatPrice(t.out.selling_price)}</span>
+							<span class="text-[var(--color-text-3)] mx-1">→</span>
+							<img src={teamBadgeUrl(t.in.team_code)} alt="" class="w-5 h-5" />
+							<span class="text-[var(--color-rise)] font-medium">{t.in.web_name}</span>
+							<span class="font-mono text-xs text-[var(--color-text-3)]">{formatPrice(t.in.current_price)}</span>
+							<span class="font-mono text-xs ml-auto {calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections) > 0 ? 'text-[var(--color-rise)]' : 'text-[var(--color-fall)]'}">
+								{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)) > 0 ? '+' : ''}{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)).toFixed(1)} xPts
+							</span>
+							<button onclick={() => removeCurrentTransfer(i)} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] ml-2" title="Remove transfer">
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+							</button>
+						</div>
+					{/each}
+				</div>
 			</section>
 		{/if}
 
-		<!-- Transfer Mode: Search for incoming player -->
+		<!-- ═══════════════════════════════════════════════════════════════
+		     TRANSFER SEARCH PANEL
+		     ═══════════════════════════════════════════════════════════════ -->
 		{#if transferMode && transferOutPlayer}
-			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-5 border border-[var(--color-accent)]/30">
 				<div class="flex items-center justify-between mb-4">
-					<h3 class="font-display font-semibold text-base">
-						Replace {transferOutPlayer.web_name} ({formatPrice(transferOutPlayer.selling_price)})
-					</h3>
-					<button onclick={cancelTransfer} class="text-[var(--color-text-2)] text-sm hover:text-[var(--color-fall)]">Cancel</button>
+					<div>
+						<h3 class="font-display font-semibold text-sm">
+							Replace <span class="text-[var(--color-fall)]">{transferOutPlayer.web_name}</span>
+						</h3>
+						<p class="text-[var(--color-text-2)] text-xs mt-1">
+							Budget: <span class="font-mono">{formatPrice(workingBank + transferOutPlayer.selling_price)}</span> ·
+							Position: <span class="font-semibold">{POSITIONS[transferOutPlayer.element_type]}</span>
+						</p>
+					</div>
+					<button onclick={cancelTransfer} class="text-[var(--color-text-2)] text-sm hover:text-[var(--color-fall)] px-3 py-1.5 rounded-lg hover:bg-[var(--color-surface-3)]">
+						Cancel
+					</button>
 				</div>
-				<p class="text-[var(--color-text-2)] text-sm mb-3">
-					Budget: {formatPrice(displayBank + transferOutPlayer.selling_price)} · Position: {POSITIONS[transferOutPlayer.element_type]}
-				</p>
-				<input type="text" placeholder="Search player..." bind:value={searchQuery}
+				<input
+					type="text"
+					placeholder="Search player by name..."
+					bind:value={searchQuery}
 					oninput={onSearchInput}
-					class="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] mb-3" />
+					class="w-full px-4 py-3 rounded-xl bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] placeholder:text-[var(--color-text-3)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/30 mb-3"
+				/>
 
 				{#if searchResults.length > 0}
-					<div class="max-h-64 overflow-y-auto space-y-1">
+					<!-- Header -->
+					<div class="grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 px-3 py-1.5 text-[10px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)] mb-1">
+						<span>Player</span>
+						<span class="w-14 text-right">Price</span>
+						<span class="w-10 text-right">Form</span>
+						<span class="w-12 text-right">TWxP</span>
+						<span class="w-4"></span>
+					</div>
+					<div class="max-h-64 overflow-y-auto space-y-0.5">
 						{#each searchResults as player}
-							<button onclick={() => completeTransfer(player)}
-								class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--color-surface-3)] transition-colors text-left">
-								<img src={teamBadgeUrl(player.team_code)} alt="" class="w-5 h-5" />
-								<span class="font-medium text-sm flex-1">{player.web_name}</span>
-								<span class="text-[var(--color-text-2)] text-xs">{player.team_short}</span>
-								<span class="font-mono text-sm">{formatPrice(player.now_cost)}</span>
-								<span class="font-mono text-xs text-[var(--color-accent)]">
+							<button
+								onclick={() => completeTransfer(player)}
+								class="w-full grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-3 py-2.5 rounded-xl hover:bg-[var(--color-surface-3)] transition-colors text-left"
+							>
+								<div class="flex items-center gap-2 min-w-0">
+									<img src={teamBadgeUrl(player.team_code)} alt="" class="w-5 h-5 flex-shrink-0" />
+									<span class="font-medium text-sm truncate">{player.web_name}</span>
+									<span class="text-[var(--color-text-3)] text-xs flex-shrink-0">{player.team_short}</span>
+								</div>
+								<span class="font-mono text-sm w-14 text-right">{formatPrice(player.now_cost)}</span>
+								<span class="font-mono text-xs text-[var(--color-text-1)] w-10 text-right">{Number(player.form).toFixed(1)}</span>
+								<span class="font-mono text-sm text-[var(--color-accent-light)] w-12 text-right font-semibold">
 									{calculatePlayerTWxP(player.projections).toFixed(1)}
 								</span>
+								<span class="text-[var(--color-rise)] w-4 text-center">+</span>
 							</button>
 						{/each}
 					</div>
 				{:else if searchQuery.length >= 2 && !searching}
-					<p class="text-[var(--color-text-2)] text-sm">No players found within budget.</p>
+					<p class="text-[var(--color-text-2)] text-sm py-4 text-center">No players found within budget.</p>
+				{:else if searching}
+					<p class="text-[var(--color-text-2)] text-sm py-4 text-center">Searching…</p>
 				{/if}
 			</section>
 		{/if}
 
-		<!-- Squad Display -->
+		<!-- ═══════════════════════════════════════════════════════════════
+		     SQUAD VIEW
+		     ═══════════════════════════════════════════════════════════════ -->
 		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow overflow-hidden">
-			<div class="px-6 pt-5 pb-3 flex items-center justify-between">
-				<h3 class="font-display font-semibold text-base">
-					{activeOptionIdx >= 0 ? options[activeOptionIdx].name : 'Starting XI'}
-				</h3>
-				{#if !transferMode}
-					<p class="text-[var(--color-text-2)] text-xs">Click a player to transfer out</p>
-				{/if}
+			<!-- Header row -->
+			<div class="overflow-x-auto">
+				<div class="min-w-[700px]">
+					<div class="grid grid-cols-[2.5fr_auto_auto_auto_repeat(var(--gw-cols,5),minmax(0,1fr))_auto_auto] gap-x-2 px-5 py-3 text-[10px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)] items-center"
+						style="--gw-cols: {gwColumns.length}; grid-template-columns: 2.5fr 52px 60px 60px repeat({gwColumns.length}, minmax(40px,1fr)) 56px 36px;">
+						<span>Player</span>
+						<span class="text-center">Pos</span>
+						<span class="text-right">Price</span>
+						<span class="text-center">Fixture</span>
+						{#each gwColumns as gw}
+							<span class="text-center">GW{gw}</span>
+						{/each}
+						<span class="text-right">TWxP</span>
+						<span></span>
+					</div>
+
+					<!-- Starting XI -->
+					<div class="px-2 pt-1 pb-2">
+						{#each starting11 as player}
+							<div class="group grid items-center gap-x-2 px-3 py-2 rounded-xl hover:bg-[var(--color-surface-3)]/40 transition-colors"
+								style="grid-template-columns: 2.5fr 52px 60px 60px repeat({gwColumns.length}, minmax(40px,1fr)) 56px 36px;">
+								<!-- Player name + team badge -->
+								<div class="flex items-center gap-2 min-w-0">
+									<img src={teamBadgeUrl(player.team_code)} alt="" class="w-5 h-5 flex-shrink-0" />
+									<a href="/player/{player.element_id}" class="font-medium text-sm truncate hover:text-[var(--color-accent-light)] transition-colors">
+										{player.web_name}
+									</a>
+								</div>
+								<!-- Position badge -->
+								<div class="flex justify-center">
+									<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded {positionBg(player.element_type)}">
+										{POSITIONS[player.element_type]}
+									</span>
+								</div>
+								<!-- Price (current + selling) -->
+								<div class="text-right">
+									<span class="font-mono text-xs">{formatPrice(player.current_price)}</span>
+									<span class="font-mono text-[10px] text-[var(--color-text-3)] ml-0.5">({formatPrice(player.selling_price)})</span>
+								</div>
+								<!-- Next fixture (placeholder) -->
+								<div class="flex justify-center">
+									<span class="text-xs text-[var(--color-text-3)] font-mono">--</span>
+								</div>
+								<!-- GW expected points -->
+								{#each gwColumns as gw}
+									<div class="text-center font-mono text-xs text-[var(--color-text-1)]">
+										{getPlayerGwPts(player, gw)}
+									</div>
+								{/each}
+								<!-- TWxP -->
+								<div class="text-right font-mono text-sm font-semibold text-[var(--color-accent-light)]">
+									{calculatePlayerTWxP(player.projections).toFixed(1)}
+								</div>
+								<!-- Transfer out button -->
+								<div class="flex justify-center">
+									<button
+										onclick={() => startTransferOut(player)}
+										disabled={transferMode}
+										class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-[var(--color-fall-bg)] text-[var(--color-text-3)] hover:text-[var(--color-fall)] disabled:cursor-not-allowed"
+										title="Transfer out"
+									>
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4m0 0l6-6m-6 6l6 6"/></svg>
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
+
+					<!-- Bench separator -->
+					<div class="mx-5 border-t border-dashed border-[var(--color-surface-4)] my-1"></div>
+					<div class="px-5 py-1.5">
+						<span class="text-[10px] text-[var(--color-text-3)] uppercase tracking-wider font-semibold">Bench</span>
+					</div>
+
+					<!-- Bench -->
+					<div class="px-2 pb-3 opacity-70">
+						{#each bench as player}
+							<div class="group grid items-center gap-x-2 px-3 py-1.5 rounded-xl hover:bg-[var(--color-surface-3)]/30 transition-colors"
+								style="grid-template-columns: 2.5fr 52px 60px 60px repeat({gwColumns.length}, minmax(40px,1fr)) 56px 36px;">
+								<!-- Player name + team badge -->
+								<div class="flex items-center gap-2 min-w-0">
+									<img src={teamBadgeUrl(player.team_code)} alt="" class="w-5 h-5 flex-shrink-0" />
+									<a href="/player/{player.element_id}" class="text-sm truncate hover:text-[var(--color-accent-light)] transition-colors">
+										{player.web_name}
+									</a>
+								</div>
+								<!-- Position badge -->
+								<div class="flex justify-center">
+									<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded {positionBg(player.element_type)}">
+										{POSITIONS[player.element_type]}
+									</span>
+								</div>
+								<!-- Price -->
+								<div class="text-right">
+									<span class="font-mono text-xs">{formatPrice(player.current_price)}</span>
+									<span class="font-mono text-[10px] text-[var(--color-text-3)] ml-0.5">({formatPrice(player.selling_price)})</span>
+								</div>
+								<!-- Fixture placeholder -->
+								<div class="flex justify-center">
+									<span class="text-xs text-[var(--color-text-3)] font-mono">--</span>
+								</div>
+								<!-- GW pts -->
+								{#each gwColumns as gw}
+									<div class="text-center font-mono text-xs text-[var(--color-text-2)]">
+										{getPlayerGwPts(player, gw)}
+									</div>
+								{/each}
+								<!-- TWxP -->
+								<div class="text-right font-mono text-sm text-[var(--color-text-2)]">
+									{calculatePlayerTWxP(player.projections).toFixed(1)}
+								</div>
+								<!-- Transfer out button -->
+								<div class="flex justify-center">
+									<button
+										onclick={() => startTransferOut(player)}
+										disabled={transferMode}
+										class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-[var(--color-fall-bg)] text-[var(--color-text-3)] hover:text-[var(--color-fall)] disabled:cursor-not-allowed"
+										title="Transfer out"
+									>
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4m0 0l6-6m-6 6l6 6"/></svg>
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
 			</div>
-			<div class="px-3 pb-3">
-				{#each starting11 as player}
-					<button onclick={() => !transferMode && startTransferOut(player)}
-						class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--color-surface-3)]/50 transition-colors text-left
-							{transferMode ? 'opacity-50 cursor-default' : 'cursor-pointer'}">
-						<img src={teamBadgeUrl(player.team_code)} alt="" class="w-6 h-6" />
-						<div class="flex-1 min-w-0">
-							<span class="font-medium text-sm">{player.web_name}</span>
-							{#if player.bcv != null}
-								<span class="text-[var(--color-text-3)] text-xs ml-1">{player.bcv.toFixed(2)}</span>
+		</section>
+
+		<!-- ═══════════════════════════════════════════════════════════════
+		     COMPARISON VIEW
+		     ═══════════════════════════════════════════════════════════════ -->
+		{#if savedOptions.length > 0}
+			<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-5 space-y-5">
+				<div class="flex items-center justify-between">
+					<h2 class="font-display font-semibold text-lg">Compare Options</h2>
+					<span class="text-[var(--color-text-3)] text-xs">{savedOptions.length} option{savedOptions.length > 1 ? 's' : ''} saved</span>
+				</div>
+
+				<div class="grid gap-4 lg:grid-cols-{Math.min(comparisonData.length, 3)}">
+					{#each comparisonData as item, i}
+						<div class="rounded-xl bg-[var(--color-surface-3)]/40 p-4 space-y-3 {item.verdict?.worth ? 'ring-1 ring-[var(--color-rise)]/30' : ''}">
+							<!-- Option header -->
+							<div class="flex items-center justify-between">
+								<h3 class="font-semibold text-sm">{item.name}</h3>
+								{#if i > 0}
+									<button onclick={() => deleteOption(i - 1)} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)] text-xs p-1">✕</button>
+								{/if}
+							</div>
+
+							<!-- Transfers list -->
+							{#if item.transfers.length > 0}
+								<div class="space-y-1">
+									{#each item.transfers as t}
+										<div class="flex items-center gap-2 text-xs">
+											<span class="text-[var(--color-fall)]">{t.out.web_name}</span>
+											<span class="text-[var(--color-text-3)]">→</span>
+											<span class="text-[var(--color-rise)]">{t.in.web_name}</span>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<p class="text-[var(--color-text-2)] text-xs italic">Baseline — no changes</p>
 							{/if}
-							<span class="text-[var(--color-text-3)] text-xs ml-2">{POSITIONS[player.element_type]}</span>
-						</div>
-						<span class="font-mono text-xs text-[var(--color-text-2)]">{formatPrice(player.current_price)}</span>
-						<span class="font-mono text-xs text-[var(--color-text-2)] w-14 text-right" title="Selling price">
-							({formatPrice(player.selling_price)})
-						</span>
-						<span class="font-mono text-sm font-semibold text-[var(--color-accent-light)] w-12 text-right">
-							{calculatePlayerTWxP(player.projections).toFixed(1)}
-						</span>
-					</button>
-				{/each}
-			</div>
-		</section>
 
-		<!-- Bench -->
-		<section class="rounded-2xl bg-[var(--color-surface-2)]/50 card-glow overflow-hidden">
-			<div class="px-6 pt-5 pb-3">
-				<h3 class="font-display font-semibold text-base text-[var(--color-text-2)]">Bench</h3>
-			</div>
-			<div class="px-3 pb-3">
-				{#each bench as player}
-					<button onclick={() => !transferMode && startTransferOut(player)}
-						class="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-[var(--color-surface-3)]/30 transition-colors opacity-70 text-left
-							{transferMode ? 'cursor-default' : 'cursor-pointer'}">
-						<img src={teamBadgeUrl(player.team_code)} alt="" class="w-5 h-5" />
-						<div class="flex-1 min-w-0">
-							<span class="text-sm">{player.web_name}</span>
-							<span class="text-[var(--color-text-3)] text-xs ml-2">{POSITIONS[player.element_type]}</span>
-						</div>
-						<span class="font-mono text-xs text-[var(--color-text-2)]">{formatPrice(player.current_price)}</span>
-						<span class="font-mono text-xs text-[var(--color-text-2)] w-14 text-right">({formatPrice(player.selling_price)})</span>
-						<span class="font-mono text-sm text-[var(--color-text-2)] w-12 text-right">
-							{calculatePlayerTWxP(player.projections).toFixed(1)}
-						</span>
-					</button>
-				{/each}
-			</div>
-		</section>
+							<!-- Stats -->
+							<div class="grid grid-cols-3 gap-2 text-center pt-2 border-t border-[var(--color-surface-4)]">
+								<div>
+									<div class="font-mono text-sm font-semibold">{item.twxp.toFixed(1)}</div>
+									<div class="text-[9px] text-[var(--color-text-3)] uppercase">TWxP</div>
+								</div>
+								<div>
+									<div class="font-mono text-sm font-semibold {item.cost > 0 ? 'text-[var(--color-fall)]' : ''}">{item.cost > 0 ? `-${item.cost}` : '0'}</div>
+									<div class="text-[9px] text-[var(--color-text-3)] uppercase">Cost</div>
+								</div>
+								<div>
+									<div class="font-mono text-sm font-semibold {item.netGain > 0 ? 'text-[var(--color-rise)]' : item.netGain < 0 ? 'text-[var(--color-fall)]' : ''}">
+										{item.netGain > 0 ? '+' : ''}{item.netGain.toFixed(1)}
+									</div>
+									<div class="text-[9px] text-[var(--color-text-3)] uppercase">Net Gain</div>
+								</div>
+							</div>
 
-		<!-- Load different team -->
-		<button onclick={() => { squadData = null; managerId = ''; options = []; }}
-			class="text-[var(--color-text-2)] text-sm hover:text-[var(--color-text-0)]">
-			← Load different team
-		</button>
+							<!-- Bar -->
+							<div class="h-2 rounded-full overflow-hidden bg-[var(--color-surface-4)]">
+								<div
+									class="h-full rounded-full transition-all duration-700 {i === 0 ? 'bg-[var(--color-surface-4)]' : item.verdict?.worth ? 'bg-[var(--color-rise)]' : 'bg-[var(--color-fall)]/60'}"
+									style="width: {item.barWidth}%"
+								></div>
+							</div>
+
+							<!-- Verdict -->
+							{#if item.verdict}
+								<div class="flex items-center gap-2">
+									<span class="text-xs px-2.5 py-1 rounded-full font-medium
+										{item.verdict.worth ? 'bg-[var(--color-rise-bg)] text-[var(--color-rise)]' : 'bg-[var(--color-fall-bg)] text-[var(--color-fall)]'}">
+										{item.verdict.worth ? '✓ Worth it' : '✗ Hold'}
+									</span>
+									<span class="text-[var(--color-text-2)] text-[10px] flex-1">{item.verdict.reason}</span>
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
+		<!-- ═══════════════════════════════════════════════════════════════
+		     FOOTER
+		     ═══════════════════════════════════════════════════════════════ -->
+		<div class="flex items-center justify-between pt-2">
+			<button
+				onclick={() => { squadData = null; managerId = ''; savedOptions = []; currentTransfers = []; declaredTransfers = []; }}
+				class="text-[var(--color-text-2)] text-sm hover:text-[var(--color-text-0)] transition-colors"
+			>
+				← Load different team
+			</button>
+			<span class="text-[var(--color-text-3)] text-xs">
+				TWxP uses {DECAY} decay over 8 GWs · BCV threshold {BCV_THRESHOLD}
+			</span>
+		</div>
 	{/if}
 </div>
