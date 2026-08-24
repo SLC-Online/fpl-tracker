@@ -39,8 +39,9 @@
 	let searchQuery = $state('');
 	let filterTeam = $state('');
 	let filterPos = $state('');
-	let sortBy: 'twxp' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' = $state('twxp');
+	let sortBy: 'twxp' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' | 'gw' = $state('twxp');
 	let sortAsc = $state(false);
+	let sortGw = $state(0);  // Which specific GW to sort by (when sortBy === 'gw')
 
 	// --- Helpers ---
 	function formatPrice(cost: number): string {
@@ -378,6 +379,11 @@
 				else if (sortBy === 'ep_next') diff = parseFloat(b.ep_next || '0') - parseFloat(a.ep_next || '0');
 				else if (sortBy === 'transfers_in') diff = (b.transfers_in_event || 0) - (a.transfers_in_event || 0);
 				else if (sortBy === 'xg') diff = parseFloat(b.expected_goals || '0') - parseFloat(a.expected_goals || '0');
+				else if (sortBy === 'gw') {
+					const aProj = (a.projections || []).find((p: any) => p.gw === sortGw);
+					const bProj = (b.projections || []).find((p: any) => p.gw === sortGw);
+					diff = (bProj?.pts || 0) - (aProj?.pts || 0);
+				}
 				return sortAsc ? -diff : diff;
 			})
 			.slice(0, 40);
@@ -400,7 +406,7 @@
 				gws.add(proj.gw);
 			}
 		}
-		return [...gws].sort((a, b) => a - b).slice(0, 6);
+		return [...gws].sort((a, b) => a - b).slice(0, 8);
 	});
 
 	// Min/max expected points per GW column (for relative colour coding)
@@ -421,28 +427,23 @@
 	});
 
 	// Colour scale: maps a value within a GW's range to a background colour
-	// High (relative) = rich green, mid = pale yellow, low = pale red/white
+	// Smoother gradient: deep green → light green → pale yellow → neutral → pale orange → orange
 	function gwCellColor(pts: number, gw: number): string {
 		const { min, max } = gwMinMax[gw] || { min: 0, max: 1 };
 		const range = max - min || 1;
 		const ratio = (pts - min) / range; // 0 = lowest, 1 = highest
 
-		if (ratio > 0.75) {
-			// Rich green
-			const intensity = Math.round(40 + (ratio - 0.75) * 4 * 30); // 40-70% green
-			return `rgba(22, 163, 74, ${intensity / 100})`;
-		} else if (ratio > 0.4) {
-			// Yellow-green
-			const intensity = Math.round(20 + (ratio - 0.4) * (100/35) * 20);
-			return `rgba(202, 138, 4, ${intensity / 100})`;
-		} else if (ratio > 0.15) {
-			// Pale/neutral
-			return `rgba(255, 255, 255, 0.03)`;
-		} else {
-			// Low - pale red
-			const intensity = Math.round(15 + (0.15 - ratio) * (100/15) * 25);
-			return `rgba(239, 68, 68, ${intensity / 100})`;
-		}
+		// 10-shade scale from green to red
+		if (ratio >= 0.9) return 'rgba(22, 163, 74, 0.55)';       // Deep green
+		if (ratio >= 0.8) return 'rgba(22, 163, 74, 0.4)';        // Rich green
+		if (ratio >= 0.7) return 'rgba(34, 197, 94, 0.3)';        // Medium green
+		if (ratio >= 0.6) return 'rgba(74, 222, 128, 0.2)';       // Light green
+		if (ratio >= 0.5) return 'rgba(134, 239, 172, 0.12)';     // Pale green
+		if (ratio >= 0.4) return 'rgba(253, 224, 71, 0.1)';       // Pale yellow
+		if (ratio >= 0.3) return 'rgba(255, 255, 255, 0.03)';     // Neutral
+		if (ratio >= 0.2) return 'rgba(251, 191, 36, 0.08)';      // Pale amber
+		if (ratio >= 0.1) return 'rgba(251, 146, 60, 0.12)';      // Pale orange
+		return 'rgba(239, 68, 68, 0.15)';                          // Light red
 	}
 
 	function getPlayerGwPtsPanel(player: any, gw: number): number | null {
@@ -989,7 +990,7 @@
 							<select bind:value={sortBy} onchange={() => sortAsc = false}
 								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
 								<option value="twxp">xPts (8wk)</option>
-								<option value="ep_next">xPts next</option>
+								<option value="ep_next">Next GW xPts</option>
 								<option value="price">Price</option>
 								<option value="form">Form</option>
 								<option value="points">Total Pts</option>
@@ -1001,14 +1002,15 @@
 
 					<!-- Column headers -->
 					<div class="overflow-x-auto">
-						<div class="min-w-[400px]">
+						<div class="min-w-[350px]">
 							<div class="grid items-center px-2 py-1.5 text-[7px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)] gap-x-1"
-								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 32px) 40px;">
+								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 28px) 40px;">
 								<span></span>
 								<span>Player</span>
 								<span class="text-right">£</span>
 								{#each panelGwColumns as gw}
-									<span class="text-center">{gw}</span>
+									<button onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}
+										class="text-center cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}">{gw}</button>
 								{/each}
 								<button onclick={() => sortAsc = !sortAsc}
 									class="text-right cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
@@ -1021,14 +1023,14 @@
 
 					<!-- Player list with GW colour-coded cells -->
 					<div class="panel-results overflow-x-auto">
-						<div class="min-w-[400px]">
+						<div class="min-w-[350px]">
 						{#if searchResults.length > 0}
 							{#each searchResults as player}
 								<button
 									onclick={() => transferOutPlayer ? completeTransfer(player) : null}
 									disabled={!transferOutPlayer}
 									class="w-full grid items-center px-2 py-1.5 gap-x-1 hover:bg-white/[0.03] transition-colors text-left border-b border-[var(--color-surface-4)]/30 {!transferOutPlayer ? 'opacity-70 cursor-default' : 'cursor-pointer'}"
-									style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 32px) 40px;"
+									style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 28px) 40px;"
 								>
 									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7" />
 									<div class="min-w-0">
