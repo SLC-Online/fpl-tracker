@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { teamBadgeUrl, POSITIONS } from '$lib/types';
 	import {
-		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers, swapPlayers,
+		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers,
 		transferPointsCost, isTransferWorthIt,
 		DECAY, BCV_THRESHOLD, type SquadPlayer, type TransferOption
 	} from '$lib/transfer-engine';
