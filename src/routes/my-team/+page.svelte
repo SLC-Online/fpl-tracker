@@ -1134,11 +1134,10 @@
 	   TOP BAR
 	   ═══════════════════════════════════════════════════════════ */
 	.top-bar {
-		border-radius: 14px;
+		border-radius: 10px;
 		background: var(--color-surface-2);
-		border: 1px solid var(--color-surface-4);
-		padding: 14px 20px;
-		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+		border: 1px solid rgba(255,255,255,0.04);
+		padding: 12px 18px;
 	}
 
 	.top-bar-inner {
@@ -1217,9 +1216,9 @@
 	   DECLARE SECTION
 	   ═══════════════════════════════════════════════════════════ */
 	.declare-section {
-		border-radius: 12px;
+		border-radius: 8px;
 		background: var(--color-surface-2);
-		border: 1px solid var(--color-surface-4);
+		border: 1px solid rgba(255,255,255,0.04);
 		overflow: hidden;
 	}
 
