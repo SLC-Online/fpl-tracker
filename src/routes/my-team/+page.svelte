@@ -1041,7 +1041,8 @@
 								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 28px) 40px;">
 								<span></span>
 								<span>Player</span>
-								<span class="text-right">£</span>
+								<button onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}
+									class="text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">£{sortBy === 'price' ? (sortAsc ? '↑' : '↓') : ''}</button>
 								{#each panelGwColumns as gw}
 									<button onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}
 										class="text-center cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}">{gw}</button>
@@ -1080,7 +1081,16 @@
 										</div>
 									{/each}
 									<div class="text-right font-mono text-[9px] font-semibold text-[var(--color-accent-light)]">
-										{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+										{#if sortBy === 'twxp'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+										{:else if sortBy === 'price'}{formatPrice(player.now_cost)}
+										{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
+										{:else if sortBy === 'form'}{player.form || '-'}
+										{:else if sortBy === 'points'}{player.total_points || 0}
+										{:else if sortBy === 'transfers_in'}{(player.transfers_in_event || 0).toLocaleString()}
+										{:else if sortBy === 'xg'}{player.expected_goals || '-'}
+										{:else if sortBy === 'gw'}{getPlayerGwPtsPanel(player, sortGw)?.toFixed(1) || '-'}
+										{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+										{/if}
 									</div>
 								</button>
 							{/each}
