@@ -245,6 +245,45 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	}
 
+	// Also populate projection_inputs from the imported data
+	if (imports.length > 0) {
+		// Get the Transfer Algorithm source ID
+		const { data: sources } = await supabaseAdmin
+			.from('projection_sources')
+			.select('id')
+			.eq('source_name', 'transfer_algorithm')
+			.limit(1)
+			.single();
+
+		if (sources) {
+			const projRows: any[] = [];
+			for (const imp of imports) {
+				const gws = [imp.gw1, imp.gw2, imp.gw3, imp.gw4, imp.gw5, imp.gw6, imp.gw7, imp.gw8];
+				for (let i = 0; i < gws.length; i++) {
+					if (gws[i] == null) continue;
+					const actualGw = gameweek + i;
+					if (actualGw > 38) continue;
+					projRows.push({
+						source_id: sources.id,
+						element_id: imp.element_id,
+						season,
+						gameweek: actualGw,
+						uploaded_for_gw: gameweek,
+						expected_points: gws[i],
+						meta: JSON.stringify({ bcv: imp.bcv, projected_sum: imp.projected_sum }),
+					});
+				}
+			}
+			// Batch upsert projections
+			for (let i = 0; i < projRows.length; i += 200) {
+				await supabaseAdmin.from('projection_inputs').upsert(
+					projRows.slice(i, i + 200),
+					{ onConflict: 'source_id,element_id,season,gameweek,uploaded_for_gw' }
+				);
+			}
+		}
+	}
+
 	const total = matched + unmatched.length;
 	return json({
 		matched,
