@@ -949,7 +949,8 @@
 									</div>
 									<div class="text-right font-mono text-[10px]">{formatPrice(player.current_price)}</div>
 									{#each gwColumns as gw}
-										<div class="text-center font-mono text-[10px] text-[var(--color-text-2)]">
+										<div class="text-center font-mono text-[10px] rounded px-0.5 py-0.5"
+											style="background: {(player.projections || []).find(p => p.gw === gw)?.pts != null ? squadGwCellColor((player.projections || []).find(p => p.gw === gw)?.pts ?? 0, gw) : 'transparent'}">
 											{getPlayerGwPts(player, gw)}
 										</div>
 									{/each}
