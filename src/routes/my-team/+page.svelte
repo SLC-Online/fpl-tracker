@@ -356,11 +356,11 @@
 
 	async function loadAllPlayers() {
 		if (allPlayersLoaded) return;
+		allPlayersLoaded = true;  // Set immediately to prevent re-entry
 		try {
 			const resp = await fetch('/api/players?q=');
 			if (resp.ok) {
 				allPlayers = await resp.json();
-				allPlayersLoaded = true;
 			}
 		} catch {}
 	}
