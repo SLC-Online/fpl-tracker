@@ -83,11 +83,11 @@ export const GET: RequestHandler = async ({ url }) => {
 	const { data: projections } = await supabaseAdmin
 		.from('projection_inputs')
 		.select('element_id, gameweek, expected_points')
-		.in('element_id', elementIds)
 		.eq('uploaded_for_gw', latestUploadGw)
 		.gte('gameweek', nextGw)
 		.lte('gameweek', nextGw + 7)
-		.order('gameweek');
+		.order('gameweek')
+		.limit(5000);
 
 	const projMap = new Map<number, { gw: number; pts: number }[]>();
 	for (const proj of projections || []) {
@@ -99,9 +99,9 @@ export const GET: RequestHandler = async ({ url }) => {
 	const { data: metaData } = await supabaseAdmin
 		.from('projection_inputs')
 		.select('element_id, meta')
-		.in('element_id', elementIds)
 		.eq('uploaded_for_gw', latestUploadGw)
-		.order('gameweek', { ascending: false });
+		.eq('gameweek', nextGw)
+		.limit(1000);
 
 	const bcvMap = new Map<number, number>();
 	for (const m of metaData || []) {

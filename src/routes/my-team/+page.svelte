@@ -419,7 +419,7 @@
 				}
 				return sortAsc ? -diff : diff;
 			})
-			.slice(0, 40);
+			.slice(0, 100);
 	});
 
 	// Available teams for filter dropdown
