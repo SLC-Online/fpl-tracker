@@ -80,19 +80,27 @@ export const GET: RequestHandler = async ({ url }) => {
 		.single();
 	const latestUploadGw = latestUpload?.uploaded_for_gw || 1;
 
-	const { data: projections } = await supabaseAdmin
-		.from('projection_inputs')
-		.select('element_id, gameweek, expected_points')
-		.eq('uploaded_for_gw', latestUploadGw)
-		.gte('gameweek', nextGw)
-		.lte('gameweek', nextGw + 7)
-		.order('gameweek')
-		.limit(5000);
-
+	// Fetch projections in batches to avoid Supabase 1000-row limit
 	const projMap = new Map<number, { gw: number; pts: number }[]>();
-	for (const proj of projections || []) {
-		if (!projMap.has(proj.element_id)) projMap.set(proj.element_id, []);
-		projMap.get(proj.element_id)!.push({ gw: proj.gameweek, pts: proj.expected_points });
+
+	// Batch by element_id chunks of 80 (80 players × 8 GWs = 640 rows per request, under 1000)
+	const BATCH_SIZE = 80;
+	for (let i = 0; i < elementIds.length; i += BATCH_SIZE) {
+		const batch = elementIds.slice(i, i + BATCH_SIZE);
+		const { data: projBatch } = await supabaseAdmin
+			.from('projection_inputs')
+			.select('element_id, gameweek, expected_points')
+			.in('element_id', batch)
+			.eq('uploaded_for_gw', latestUploadGw)
+			.gte('gameweek', nextGw)
+			.lte('gameweek', nextGw + 7)
+			.order('gameweek')
+			.limit(1000);
+
+		for (const proj of projBatch || []) {
+			if (!projMap.has(proj.element_id)) projMap.set(proj.element_id, []);
+			projMap.get(proj.element_id)!.push({ gw: proj.gameweek, pts: proj.expected_points });
+		}
 	}
 
 	// Also get meta (BCV) from projection_inputs (latest upload only)
