@@ -17,50 +17,54 @@
 
 		const timestamps = data.timeline.map((s: any) => new Date(s.snapshots.timestamp).getTime());
 		const prices = data.timeline.map((s: any) => s.now_cost / 10);
-		const ownership = data.timeline.map((s: any) => parseFloat(s.selected_by_percent || 0));
-		const pricePct = data.timeline.map((s: any) => parseFloat(s.price_change_percent || 0));
 
 		const options = {
 			chart: {
-				type: 'line',
-				height: 360,
+				type: 'area',
+				height: 240,
 				background: 'transparent',
 				foreColor: '#64748b',
-				toolbar: { show: true, tools: { download: false } },
-				zoom: { enabled: true },
+				toolbar: { show: false },
+				zoom: { enabled: false },
 				fontFamily: 'Sohne, system-ui, sans-serif',
+				sparkline: { enabled: false },
 			},
 			theme: { mode: 'dark' as const },
 			series: [
-				{ name: 'Price (£)', data: prices, type: 'line' },
-				{ name: 'Price Change %', data: pricePct, type: 'line' },
-				{ name: 'Ownership %', data: ownership, type: 'line' },
+				{ name: 'Price', data: prices },
 			],
 			xaxis: {
 				type: 'datetime' as const,
 				categories: timestamps,
-				labels: { style: { fontFamily: 'Sohne Mono' } },
+				labels: { style: { fontFamily: 'Sohne Mono', fontSize: '10px' } },
+				axisBorder: { show: false },
+				axisTicks: { show: false },
 			},
-			yaxis: [
-				{ title: { text: 'Price (£)', style: { fontFamily: 'Sohne' } }, decimalsInFloat: 1 },
-				{ title: { text: 'Price Change %', style: { fontFamily: 'Sohne' } }, opposite: true, decimalsInFloat: 1 },
-				{ show: false },
-			],
-			stroke: { width: [3, 2, 1.5], curve: 'smooth' as const },
-			colors: ['#6366f1', '#10b981', '#f59e0b'],
-			grid: { borderColor: '#1a2440', strokeDashArray: 4 },
+			yaxis: {
+				labels: { 
+					formatter: (val: number) => `£${val.toFixed(1)}`,
+					style: { fontFamily: 'Sohne Mono', fontSize: '10px' },
+				},
+			},
+			stroke: { width: 2, curve: 'smooth' as const },
+			fill: {
+				type: 'gradient',
+				gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0, stops: [0, 100] },
+			},
+			colors: ['#6366f1'],
+			grid: { borderColor: '#1a2440', strokeDashArray: 4, padding: { left: 10, right: 10 } },
 			tooltip: {
 				theme: 'dark',
 				style: { fontFamily: 'Sohne' },
+				y: { formatter: (val: number) => `£${val.toFixed(1)}` },
 			},
-			legend: { fontFamily: 'Sohne', fontSize: '12px' },
 			annotations: {
 				xaxis: data.priceChanges.map((pc: any) => ({
 					x: new Date(pc.detected_at).getTime(),
 					borderColor: pc.change > 0 ? '#10b981' : '#ef4444',
 					label: {
-						text: `${pc.change > 0 ? '↑' : '↓'} ${formatPrice(pc.new_cost)}`,
-						style: { color: '#fff', background: pc.change > 0 ? '#10b981' : '#ef4444', fontFamily: 'Sohne Mono', fontSize: '11px' }
+						text: `${pc.change > 0 ? '↑' : '↓'}${formatPrice(pc.new_cost)}`,
+						style: { color: '#fff', background: pc.change > 0 ? '#10b981' : '#ef4444', fontFamily: 'Sohne Mono', fontSize: '10px', padding: { left: 4, right: 4, top: 2, bottom: 2 } }
 					}
 				}))
 			}
@@ -123,10 +127,68 @@
 		</div>
 	</div>
 
+	<!-- Stats Grid -->
+	{#if data.timeline.length > 0}
+		{@const latest = data.timeline[data.timeline.length - 1]}
+		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
+			<h2 class="font-display font-semibold text-lg mb-4">Stats</h2>
+			<div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.total_points}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Total Pts</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.form || '-'}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Form</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.minutes || 0}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Minutes</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.goals_scored || 0}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Goals</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.assists || 0}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Assists</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.clean_sheets || 0}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Clean Sheets</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.expected_goals || '-'}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">xG</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.expected_assists || '-'}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">xA</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.expected_goal_involvements || '-'}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">xGI</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.selected_by_percent}%</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Ownership</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.transfers_in_event?.toLocaleString() || '0'}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Transfers In</div>
+				</div>
+				<div class="text-center">
+					<div class="font-mono text-lg font-semibold">{latest.transfers_out_event?.toLocaleString() || '0'}</div>
+					<div class="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider">Transfers Out</div>
+				</div>
+			</div>
+		</section>
+	{/if}
+
 	<!-- Chart -->
 	{#if data.timeline.length >= 2}
 		<section class="rounded-2xl bg-[var(--color-surface-2)] card-glow p-6">
-			<h2 class="font-display font-semibold text-lg mb-5">Timeline</h2>
+			<h2 class="font-display font-semibold text-lg mb-4">Price History</h2>
 			<div bind:this={chartContainer}></div>
 		</section>
 	{:else}

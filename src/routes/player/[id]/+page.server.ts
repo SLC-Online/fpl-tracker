@@ -27,7 +27,9 @@ export const load: PageServerLoad = async ({ params }) => {
 			snapshot_id, now_cost, transfers_in, transfers_out,
 			transfers_in_event, transfers_out_event, selected_by_percent,
 			price_change_percent, price_change_hourly_rate, price_change_projections,
-			total_points, event_points, form, ep_next, status, news,
+			total_points, event_points, form, ep_next, ep_this, status, news,
+			minutes, goals_scored, assists, clean_sheets,
+			expected_goals, expected_assists, expected_goal_involvements,
 			snapshots!inner(timestamp)
 		`)
 		.eq('element_id', elementId)
