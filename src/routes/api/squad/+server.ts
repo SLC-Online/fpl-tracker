@@ -85,13 +85,33 @@ export const GET: RequestHandler = async ({ url }) => {
 			}
 		}
 
-		// 8. Get projections for these players
+		// 8. Get projections for these players (use latest upload only, skip played GWs)
+		const { data: nextEvent } = await supabaseAdmin
+			.from('events')
+			.select('event_id')
+			.eq('is_next', true)
+			.limit(1)
+			.single();
+
+		const nextGw = nextEvent?.event_id || 2;
+
+		// Get the latest uploaded_for_gw
+		const { data: latestUpload } = await supabaseAdmin
+			.from('projection_inputs')
+			.select('uploaded_for_gw')
+			.order('uploaded_for_gw', { ascending: false })
+			.limit(1)
+			.single();
+
+		const latestUploadGw = latestUpload?.uploaded_for_gw || 1;
+
 		const { data: projections } = await supabaseAdmin
 			.from('projection_inputs')
 			.select('element_id, gameweek, expected_points, meta')
 			.in('element_id', elementIds)
-			.gte('gameweek', currentGw)
-			.lte('gameweek', currentGw + 8)
+			.eq('uploaded_for_gw', latestUploadGw)
+			.gte('gameweek', nextGw)
+			.lte('gameweek', nextGw + 7)
 			.order('gameweek');
 
 		// Group projections by element_id

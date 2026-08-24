@@ -52,10 +52,31 @@ export const GET: RequestHandler = async ({ url }) => {
 	// Get projections for these players
 	const elementIds = players.map((p: any) => p.element_id);
 
+	// Get current/next GW info
+	const { data: nextEvent } = await supabaseAdmin
+		.from('events')
+		.select('event_id')
+		.eq('is_next', true)
+		.limit(1)
+		.single();
+	const nextGw = nextEvent?.event_id || 2;
+
+	// Get latest upload
+	const { data: latestUpload } = await supabaseAdmin
+		.from('projection_inputs')
+		.select('uploaded_for_gw')
+		.order('uploaded_for_gw', { ascending: false })
+		.limit(1)
+		.single();
+	const latestUploadGw = latestUpload?.uploaded_for_gw || 1;
+
 	const { data: projections } = await supabaseAdmin
 		.from('projection_inputs')
 		.select('element_id, gameweek, expected_points')
 		.in('element_id', elementIds)
+		.eq('uploaded_for_gw', latestUploadGw)
+		.gte('gameweek', nextGw)
+		.lte('gameweek', nextGw + 7)
 		.order('gameweek');
 
 	const projMap = new Map<number, { gw: number; pts: number }[]>();
@@ -64,11 +85,12 @@ export const GET: RequestHandler = async ({ url }) => {
 		projMap.get(proj.element_id)!.push({ gw: proj.gameweek, pts: proj.expected_points });
 	}
 
-	// Also get meta (BCV) from projection_inputs
+	// Also get meta (BCV) from projection_inputs (latest upload only)
 	const { data: metaData } = await supabaseAdmin
 		.from('projection_inputs')
 		.select('element_id, meta')
 		.in('element_id', elementIds)
+		.eq('uploaded_for_gw', latestUploadGw)
 		.order('gameweek', { ascending: false });
 
 	const bcvMap = new Map<number, number>();
