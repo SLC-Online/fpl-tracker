@@ -88,7 +88,7 @@
 	<title>{data.player.web_name} — FPL Tracker</title>
 </svelte:head>
 
-<div class="space-y-8">
+<div class="space-y-6">
 	<!-- Player Header -->
 	<div class="flex items-start gap-6 sm:gap-8">
 		<PlayerPhoto code={data.player.code} teamCode={data.player.teams.code} size="250x250"

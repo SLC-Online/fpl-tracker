@@ -27,7 +27,7 @@
 	<title>FPL Tracker</title>
 </svelte:head>
 
-<div class="space-y-10">
+<div class="space-y-6">
 	<!-- Hero header -->
 	<header>
 		<h1 class="font-display font-bold text-3xl sm:text-4xl tracking-tight">Overview</h1>
