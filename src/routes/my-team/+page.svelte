@@ -156,13 +156,13 @@
 		return [...gws].sort((a, b) => a - b).slice(0, 7);
 	});
 
-	// Min/max per GW for squad list view colour coding
+	// Min/max per GW for squad list view colour coding (uses ALL players for consistency)
 	let squadGwMinMax = $derived.by(() => {
 		const result: Record<number, { min: number; max: number }> = {};
 		for (const gw of gwColumns) {
 			let min = Infinity, max = -Infinity;
-			for (const p of workingSquad) {
-				const proj = (p.projections || []).find(pr => pr.gw === gw);
+			for (const p of allPlayers) {
+				const proj = (p.projections || []).find((pr: any) => pr.gw === gw);
 				if (proj) {
 					if (proj.pts < min) min = proj.pts;
 					if (proj.pts > max) max = proj.pts;
@@ -443,11 +443,12 @@
 	});
 
 	// Min/max expected points per GW column (for relative colour coding)
+	// Uses ALL players (not just filtered results) so colours are consistent
 	let gwMinMax = $derived.by(() => {
 		const result: Record<number, { min: number; max: number }> = {};
 		for (const gw of panelGwColumns) {
 			let min = Infinity, max = -Infinity;
-			for (const p of searchResults) {
+			for (const p of allPlayers) {
 				const proj = (p.projections || []).find((pr: any) => pr.gw === gw);
 				if (proj) {
 					if (proj.pts < min) min = proj.pts;
