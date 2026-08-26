@@ -6,6 +6,59 @@
 	let result: any = $state(null);
 	let errorMsg = $state('');
 
+	// Matching issues
+	let issues: any[] = $state([]);
+	let issuesLoading = $state(true);
+	let resolveSearch = $state('');
+	let resolveResults: any[] = $state([]);
+	let resolvingId: number | null = $state(null);
+
+	// Load issues on mount
+	$effect(() => { loadIssues(); });
+
+	async function loadIssues() {
+		issuesLoading = true;
+		try {
+			const resp = await fetch('/api/matching-issues');
+			if (resp.ok) issues = await resp.json();
+		} finally {
+			issuesLoading = false;
+		}
+	}
+
+	async function startResolve(issue: any) {
+		resolvingId = issue.id;
+		resolveSearch = issue.csv_name;
+		await searchForResolve();
+	}
+
+	async function searchForResolve() {
+		if (resolveSearch.length < 2) { resolveResults = []; return; }
+		const resp = await fetch(`/api/players?q=${encodeURIComponent(resolveSearch)}`);
+		if (resp.ok) resolveResults = await resp.json();
+	}
+
+	async function resolveIssue(elementId: number) {
+		if (!resolvingId) return;
+		const resp = await fetch('/api/matching-issues', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ id: resolvingId, element_id: elementId }),
+		});
+		if (resp.ok) {
+			issues = issues.filter(i => i.id !== resolvingId);
+			resolvingId = null;
+			resolveSearch = '';
+			resolveResults = [];
+		}
+	}
+
+	function cancelResolve() {
+		resolvingId = null;
+		resolveSearch = '';
+		resolveResults = [];
+	}
+
 	async function handleUpload() {
 		if (!files || files.length === 0) return;
 		
@@ -107,6 +160,60 @@
 		{#if errorMsg}
 			<div class="mt-6 p-4 rounded-lg bg-red-900/20 border border-red-700">
 				<p class="text-[var(--color-danger)]">Error: {errorMsg}</p>
+			</div>
+		{/if}
+	</section>
+
+	<!-- Matching Issues -->
+	<section class="bg-[var(--color-surface-2)] rounded-xl p-6 border border-[var(--color-surface-4)]">
+		<h2 class="text-lg font-semibold mb-4">Matching Issues</h2>
+		{#if issuesLoading}
+			<p class="text-[var(--color-text-2)] text-sm">Loading...</p>
+		{:else if issues.length === 0}
+			<p class="text-[var(--color-text-2)] text-sm">No unresolved matching issues ✓</p>
+		{:else}
+			<p class="text-[var(--color-text-2)] text-sm mb-4">{issues.length} player{issues.length > 1 ? 's' : ''} couldn't be matched automatically. Resolve below:</p>
+			<div class="space-y-3">
+				{#each issues as issue}
+					<div class="p-3 rounded-lg bg-[var(--color-surface-3)]/50 border border-[var(--color-surface-4)]">
+						<div class="flex items-center justify-between">
+							<div>
+								<span class="font-medium text-sm">{issue.csv_name}</span>
+								<span class="text-[var(--color-text-2)] text-xs ml-2">({issue.csv_team})</span>
+								{#if issue.notes}
+									<span class="text-[var(--color-text-3)] text-xs ml-2">{issue.notes}</span>
+								{/if}
+							</div>
+							{#if resolvingId !== issue.id}
+								<button onclick={() => startResolve(issue)}
+									class="px-3 py-1 rounded bg-[var(--color-accent)] text-white text-xs font-medium hover:bg-[var(--color-accent-light)]">
+									Resolve
+								</button>
+							{/if}
+						</div>
+
+						{#if resolvingId === issue.id}
+							<div class="mt-3 space-y-2">
+								<input type="text" bind:value={resolveSearch}
+									oninput={searchForResolve}
+									placeholder="Search for correct player..."
+									class="w-full px-3 py-2 rounded-lg bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-0)] text-sm focus:outline-none focus:border-[var(--color-accent)]" />
+								{#if resolveResults.length > 0}
+									<div class="max-h-40 overflow-y-auto space-y-1">
+										{#each resolveResults.slice(0, 15) as player}
+											<button onclick={() => resolveIssue(player.element_id)}
+												class="w-full flex items-center justify-between px-3 py-2 rounded text-left text-sm hover:bg-[var(--color-surface-3)] transition-colors">
+												<span>{player.web_name} <span class="text-[var(--color-text-3)]">({player.team_short})</span></span>
+												<span class="font-mono text-xs text-[var(--color-text-2)]">ID: {player.element_id}</span>
+											</button>
+										{/each}
+									</div>
+								{/if}
+								<button onclick={cancelResolve} class="text-[var(--color-text-3)] text-xs hover:text-[var(--color-text-1)]">Cancel</button>
+							</div>
+						{/if}
+					</div>
+				{/each}
 			</div>
 		{/if}
 	</section>
