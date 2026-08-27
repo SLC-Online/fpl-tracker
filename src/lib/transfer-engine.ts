@@ -164,8 +164,7 @@ export function transferPointsCost(numTransfers: number, freeTransfers: number =
 
 /**
  * Determine whether a transfer is worth making.
- * Based on BCV threshold: needs +0.1 BCV gain to justify.
- * Also considers the TWxP improvement vs the 4-point cost.
+ * Uses value threshold internally and TWxP improvement vs the 4-point hit cost.
  */
 export function isTransferWorthIt(
 	option: TransferOption,
@@ -174,17 +173,27 @@ export function isTransferWorthIt(
 	const ptsCost = transferPointsCost(option.transfers.length, freeTransfers);
 	const netPointsGain = option.twxpDelta - ptsCost;
 
-	// Check BCV-based threshold
+	// Internal value-based threshold check
 	const avgBcvGain = option.transfers.reduce((sum, t) => {
 		const bcvIn = t.in.bcv ?? 0;
 		const bcvOut = t.out.bcv ?? 0;
 		return sum + (bcvIn - bcvOut);
 	}, 0) / option.transfers.length;
 
-	if (netPointsGain <= 0) {
+	if (Math.abs(netPointsGain) < 0.05) {
 		return {
 			worth: false,
-			reason: `Net loss of ${Math.abs(netPointsGain).toFixed(1)} pts after transfer cost`,
+			reason: ptsCost > 0 ? `No net gain after ${ptsCost}-point hit` : 'No meaningful difference',
+			confidence: 0.5,
+		};
+	}
+
+	if (netPointsGain < 0) {
+		return {
+			worth: false,
+			reason: ptsCost > 0
+				? `−${Math.abs(netPointsGain).toFixed(1)} pts after ${ptsCost}-point hit`
+				: `−${Math.abs(netPointsGain).toFixed(1)} pts vs current player`,
 			confidence: 0.8,
 		};
 	}
@@ -192,7 +201,7 @@ export function isTransferWorthIt(
 	if (avgBcvGain < BCV_THRESHOLD && netPointsGain < 4) {
 		return {
 			worth: false,
-			reason: `BCV gain (${avgBcvGain.toFixed(2)}) below threshold (${BCV_THRESHOLD}), marginal pts gain`,
+			reason: `Marginal gain — not worth the disruption`,
 			confidence: 0.6,
 		};
 	}
@@ -200,14 +209,14 @@ export function isTransferWorthIt(
 	if (netPointsGain >= 4 || avgBcvGain >= BCV_THRESHOLD * 2) {
 		return {
 			worth: true,
-			reason: `Strong gain: +${netPointsGain.toFixed(1)} net pts, BCV +${avgBcvGain.toFixed(2)}`,
+			reason: `+${netPointsGain.toFixed(1)} pts${ptsCost > 0 ? ` (after ${ptsCost}-point hit)` : ''}`,
 			confidence: 0.85,
 		};
 	}
 
 	return {
 		worth: true,
-		reason: `Marginal gain: +${netPointsGain.toFixed(1)} net pts`,
+		reason: `+${netPointsGain.toFixed(1)} pts${ptsCost > 0 ? ` (after ${ptsCost}-point hit)` : ''}`,
 		confidence: 0.5,
 	};
 }

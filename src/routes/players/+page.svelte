@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { teamBadgeUrl, POSITIONS } from '$lib/types';
+	import { calculatePlayerTWxP, DECAY } from '$lib/transfer-engine';
 	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
@@ -10,13 +11,6 @@
 	let sortCol = $state('twxp');
 	let sortAsc = $state(false);
 	let expandedId = $state<number | null>(null);
-
-	const DECAY = 0.85;
-
-	// csvGwOffset: how many GW columns to skip (e.g. if GW1 has kicked off, skip gw1)
-	$effect(() => {
-		// This just ensures we react to data changes
-	});
 
 	function formatPrice(cost: number): string {
 		return `£${(cost / 10).toFixed(1)}`;
@@ -29,39 +23,20 @@
 	}
 
 	function getTimeWeightedXP(elementId: number): number | null {
-		const csv = data.csvLookup?.[elementId];
-		if (!csv) return null;
-		const allGws = [csv.gw1, csv.gw2, csv.gw3, csv.gw4, csv.gw5, csv.gw6, csv.gw7, csv.gw8];
-		// Skip gameweeks that have already kicked off
-		const gws = allGws.slice(data.csvGwOffset || 0);
-		let total = 0;
-		let hasData = false;
-		for (let i = 0; i < gws.length; i++) {
-			if (gws[i] !== null && gws[i] !== undefined) {
-				total += gws[i] * Math.pow(DECAY, i);
-				hasData = true;
-			}
-		}
-		return hasData ? total : null;
+		const projections = data.projMap?.[elementId];
+		if (!projections || projections.length === 0) return null;
+		return calculatePlayerTWxP(projections);
 	}
 
 	function getRemainingGws(elementId: number): { gw: number; pts: number; weight: number }[] {
-		const csv = data.csvLookup?.[elementId];
-		if (!csv) return [];
-		const allGws = [csv.gw1, csv.gw2, csv.gw3, csv.gw4, csv.gw5, csv.gw6, csv.gw7, csv.gw8];
-		const offset = data.csvGwOffset || 0;
-		const csvGameweek = csv.gameweek || 1;
-		const result: { gw: number; pts: number; weight: number }[] = [];
-		for (let i = offset; i < allGws.length; i++) {
-			if (allGws[i] !== null && allGws[i] !== undefined) {
-				result.push({
-					gw: csvGameweek + i,
-					pts: allGws[i],
-					weight: Math.pow(DECAY, i - offset)
-				});
-			}
-		}
-		return result;
+		const projections = data.projMap?.[elementId];
+		if (!projections || projections.length === 0) return [];
+		const sorted = [...projections].sort((a, b) => a.gw - b.gw);
+		return sorted.map((p, i) => ({
+			gw: p.gw,
+			pts: p.pts,
+			weight: Math.pow(DECAY, i),
+		}));
 	}
 
 	function getSortValue(row: any): number {
@@ -237,7 +212,7 @@
 						<tr class="bg-[var(--color-surface-3)]/30">
 							<td colspan="7" class="px-5 py-4">
 								<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-									{#if data.csvLookup?.[row.element_id]}
+									{#if data.projMap?.[row.element_id]}
 										{@const remainingGws = getRemainingGws(row.element_id)}
 										{@const gwPts = remainingGws.map(g => g.pts)}
 										{@const gwMax = Math.max(...gwPts, 1)}

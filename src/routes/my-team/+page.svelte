@@ -3,7 +3,7 @@
 	import {
 		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers,
 		transferPointsCost, isTransferWorthIt,
-		DECAY, BCV_THRESHOLD, type SquadPlayer, type TransferOption
+		DECAY, type SquadPlayer, type TransferOption
 	} from '$lib/transfer-engine';
 	import PitchView from '$lib/components/PitchView.svelte';
 

@@ -32,14 +32,55 @@ export const load: PageServerLoad = async () => {
 		.select('team_id, short_name, name, code')
 		.order('name');
 
-	// Get CSV expected points data (latest gameweek)
+	// Get next GW info
+	const { data: nextEvent } = await supabase
+		.from('events')
+		.select('event_id')
+		.eq('is_next', true)
+		.limit(1)
+		.single();
+	const nextGw = nextEvent?.event_id || 2;
+
+	// Get the latest uploaded_for_gw from projection_inputs
+	const { data: latestUpload } = await supabase
+		.from('projection_inputs')
+		.select('uploaded_for_gw')
+		.order('uploaded_for_gw', { ascending: false })
+		.limit(1)
+		.single();
+	const latestUploadGw = latestUpload?.uploaded_for_gw || 1;
+
+	// Fetch projections from projection_inputs (same source as My Team page)
+	// Batch to avoid 1000-row limit
+	const elementIds = (players || []).map((p: any) => p.element_id);
+	const projMap: Record<number, { gw: number; pts: number }[]> = {};
+
+	const BATCH_SIZE = 80;
+	for (let i = 0; i < elementIds.length; i += BATCH_SIZE) {
+		const batch = elementIds.slice(i, i + BATCH_SIZE);
+		const { data: projBatch } = await supabase
+			.from('projection_inputs')
+			.select('element_id, gameweek, expected_points')
+			.in('element_id', batch)
+			.eq('uploaded_for_gw', latestUploadGw)
+			.gte('gameweek', nextGw)
+			.lte('gameweek', nextGw + 7)
+			.order('gameweek')
+			.limit(1000);
+
+		for (const proj of projBatch || []) {
+			if (!projMap[proj.element_id]) projMap[proj.element_id] = [];
+			projMap[proj.element_id].push({ gw: proj.gameweek, pts: proj.expected_points });
+		}
+	}
+
+	// Also get CSV data (for the expanded row details / BCV which stays internal)
 	const { data: csvData } = await supabase
 		.from('csv_imports')
 		.select('element_id, bcv, projected_sum, gw1, gw2, gw3, gw4, gw5, gw6, gw7, gw8, ppg_longer_term, gameweek')
 		.order('gameweek', { ascending: false })
 		.limit(700);
 
-	// Build a lookup of CSV data by element_id
 	const csvLookup: Record<number, any> = {};
 	for (const row of csvData || []) {
 		if (!csvLookup[row.element_id]) {
@@ -47,7 +88,7 @@ export const load: PageServerLoad = async () => {
 		}
 	}
 
-	// Get current gameweek info to determine which GWs to skip
+	// Get current GW info
 	const { data: currentEvent } = await supabase
 		.from('events')
 		.select('event_id, is_current, is_next, finished, deadline_time')
@@ -55,20 +96,11 @@ export const load: PageServerLoad = async () => {
 		.limit(1)
 		.single();
 
-	const { data: nextEvent } = await supabase
-		.from('events')
-		.select('event_id')
-		.eq('is_next', true)
-		.limit(1)
-		.single();
-
-	// If GW1 is current (kicked off), expected points should start from GW2
-	// csvGwOffset = number of GWs to skip from the CSV data
-	// Use next_gw - csv_gameweek: if CSV is for GW1 and next GW is 2, skip 1 column
+	// csvGwOffset for backwards compat with expanded row view
 	let csvGwOffset = 0;
 	if (nextEvent && csvData && csvData.length > 0) {
 		const csvGameweek = csvData[0]?.gameweek || 1;
-		csvGwOffset = Math.max(0, nextEvent.event_id - csvGameweek);
+		csvGwOffset = Math.max(0, nextGw - csvGameweek);
 	}
 
 	return {
@@ -76,7 +108,8 @@ export const load: PageServerLoad = async () => {
 		teams: teams || [],
 		csvLookup,
 		csvGwOffset,
+		projMap,
 		currentGw: currentEvent?.event_id || 1,
-		nextGw: nextEvent?.event_id || 2,
+		nextGw,
 	};
 };
