@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { teamBadgeUrl, POSITIONS } from '$lib/types';
+	import { gwCellColor } from '$lib/gw-colors';
 	import {
 		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers,
 		transferPointsCost, isTransferWorthIt,
@@ -175,18 +176,7 @@
 
 	function squadGwCellColor(pts: number, gw: number): string {
 		const { min, max } = squadGwMinMax[gw] || { min: 0, max: 1 };
-		const range = max - min || 1;
-		const ratio = (pts - min) / range;
-		if (ratio >= 0.9) return 'rgba(22, 163, 74, 0.55)';
-		if (ratio >= 0.8) return 'rgba(22, 163, 74, 0.4)';
-		if (ratio >= 0.7) return 'rgba(34, 197, 94, 0.3)';
-		if (ratio >= 0.6) return 'rgba(74, 222, 128, 0.2)';
-		if (ratio >= 0.5) return 'rgba(134, 239, 172, 0.12)';
-		if (ratio >= 0.4) return 'rgba(253, 224, 71, 0.1)';
-		if (ratio >= 0.3) return 'rgba(255, 255, 255, 0.03)';
-		if (ratio >= 0.2) return 'rgba(251, 191, 36, 0.08)';
-		if (ratio >= 0.1) return 'rgba(251, 146, 60, 0.12)';
-		return 'rgba(239, 68, 68, 0.15)';
+		return gwCellColor(pts, min, max);
 	}
 
 	function getPlayerGwPts(player: SquadPlayer, gw: number): string {
@@ -462,22 +452,9 @@
 
 	// Colour scale: maps a value within a GW's range to a background colour
 	// Smoother gradient: deep green → light green → pale yellow → neutral → pale orange → orange
-	function gwCellColor(pts: number, gw: number): string {
+	function panelGwCellColor(pts: number, gw: number): string {
 		const { min, max } = gwMinMax[gw] || { min: 0, max: 1 };
-		const range = max - min || 1;
-		const ratio = (pts - min) / range; // 0 = lowest, 1 = highest
-
-		// 10-shade scale from green to red
-		if (ratio >= 0.9) return 'rgba(22, 163, 74, 0.55)';       // Deep green
-		if (ratio >= 0.8) return 'rgba(22, 163, 74, 0.4)';        // Rich green
-		if (ratio >= 0.7) return 'rgba(34, 197, 94, 0.3)';        // Medium green
-		if (ratio >= 0.6) return 'rgba(74, 222, 128, 0.2)';       // Light green
-		if (ratio >= 0.5) return 'rgba(134, 239, 172, 0.12)';     // Pale green
-		if (ratio >= 0.4) return 'rgba(253, 224, 71, 0.1)';       // Pale yellow
-		if (ratio >= 0.3) return 'rgba(255, 255, 255, 0.03)';     // Neutral
-		if (ratio >= 0.2) return 'rgba(251, 191, 36, 0.08)';      // Pale amber
-		if (ratio >= 0.1) return 'rgba(251, 146, 60, 0.12)';      // Pale orange
-		return 'rgba(239, 68, 68, 0.15)';                          // Light red
+		return gwCellColor(pts, min, max);
 	}
 
 	function getPlayerGwPtsPanel(player: any, gw: number): number | null {
@@ -1078,7 +1055,7 @@
 									{#each panelGwColumns as gw}
 										{@const pts = getPlayerGwPtsPanel(player, gw)}
 										<div class="text-center font-mono text-[9px] rounded px-0.5 py-0.5"
-											style="background: {pts !== null ? gwCellColor(pts, gw) : 'transparent'}">
+											style="background: {pts !== null ? panelGwCellColor(pts, gw) : 'transparent'}">
 											{pts !== null ? pts.toFixed(1) : '-'}
 										</div>
 									{/each}

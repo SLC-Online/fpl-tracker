@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { teamBadgeUrl, POSITIONS } from '$lib/types';
 	import { calculatePlayerTWxP, DECAY } from '$lib/transfer-engine';
+	import { gwCellColorFromRatio } from '$lib/gw-colors';
 	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
@@ -221,7 +222,7 @@
 											{@const range = gwMax - gwMin || 1}
 											{@const ratio = (gw.pts - gwMin) / range}
 											<div class="text-center p-2 rounded-lg"
-												style="background: {ratio > 0.7 ? `rgba(22, 163, 74, ${0.15 + ratio * 0.25})` : ratio > 0.3 ? `rgba(202, 138, 4, ${0.08 + ratio * 0.1})` : `rgba(255, 255, 255, 0.03)`}">
+												style="background: {gwCellColorFromRatio(Math.max(0, Math.min(1, ratio)))}">
 												<div class="text-[var(--color-text-2)] text-[10px] mb-0.5">GW{gw.gw}</div>
 												<div class="font-mono font-semibold text-sm">{gw.pts.toFixed(1)}</div>
 											</div>
