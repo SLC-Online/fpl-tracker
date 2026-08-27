@@ -1064,8 +1064,8 @@
 					</div>
 
 					<!-- Column headers + player list -->
-					<div class="panel-results overflow-x-auto overflow-y-auto scrollbar-none">
-						<table class="w-full text-[9px] border-collapse" style="min-width: {100 + 36 + (panelGwColumns.length * 32) + 44}px;">
+					<div class="panel-results">
+						<table class="text-[9px] border-collapse" style="min-width: {100 + 36 + (panelGwColumns.length * 32) + 44}px;">
 							<thead class="sticky top-0 bg-[var(--color-surface-2)] z-10">
 								<tr class="text-[7px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)]">
 									<th class="sticky left-0 bg-[var(--color-surface-2)] z-20 text-left py-1 pl-2 pr-1" style="min-width:100px;">Player</th>
@@ -1850,8 +1850,8 @@
 		border-radius: 8px;
 		background: var(--color-surface-2);
 		border: 1px solid rgba(255,255,255,0.04);
-		overflow: hidden;
 		max-height: calc(100vh - 380px);
+		overflow-x: auto;
 		overflow-y: auto;
 	}
 
