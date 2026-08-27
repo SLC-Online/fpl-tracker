@@ -41,7 +41,7 @@
 	let filterTeam = $state('');
 	let filterPos = $state('');
 	let maxPriceFilter = $state('');
-	let sortBy: 'twxp' | 'xpts_sum' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' | 'xa' | 'xgi' | 'clean_sheets' | 'minutes' | 'gw' = $state('twxp');
+	let sortBy: 'twxp8' | 'twxp6' | 'xpts8' | 'xpts6' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' | 'xa' | 'xgi' | 'clean_sheets' | 'minutes' | 'gw' = $state('twxp8');
 	let sortAsc = $state(false);
 	let sortGw = $state(0);  // Which specific GW to sort by (when sortBy === 'gw')
 
@@ -398,10 +398,18 @@
 			})
 			.sort((a, b) => {
 				let diff = 0;
-				if (sortBy === 'twxp') diff = calculatePlayerTWxP(b.projections || []) - calculatePlayerTWxP(a.projections || []);
-				else if (sortBy === 'xpts_sum') {
-					const aSum = (a.projections || []).reduce((s: number, p: any) => s + p.pts, 0);
-					const bSum = (b.projections || []).reduce((s: number, p: any) => s + p.pts, 0);
+				if (sortBy === 'twxp8') diff = calculatePlayerTWxP(b.projections || []) - calculatePlayerTWxP(a.projections || []);
+				else if (sortBy === 'twxp6') {
+					diff = calculatePlayerTWxP((b.projections || []).slice(0, 6)) - calculatePlayerTWxP((a.projections || []).slice(0, 6));
+				}
+				else if (sortBy === 'xpts8') {
+					const aSum = (a.projections || []).slice(0, 8).reduce((s: number, p: any) => s + p.pts, 0);
+					const bSum = (b.projections || []).slice(0, 8).reduce((s: number, p: any) => s + p.pts, 0);
+					diff = bSum - aSum;
+				}
+				else if (sortBy === 'xpts6') {
+					const aSum = (a.projections || []).slice(0, 6).reduce((s: number, p: any) => s + p.pts, 0);
+					const bSum = (b.projections || []).slice(0, 6).reduce((s: number, p: any) => s + p.pts, 0);
 					diff = bSum - aSum;
 				}
 				else if (sortBy === 'price') diff = b.now_cost - a.now_cost;
@@ -988,136 +996,141 @@
 					{/if}
 
 					<!-- Filters (always visible) -->
-					<div class="panel-card" style="padding: 8px 10px;">
-						<input
-							type="text"
-							placeholder="Search..."
-							bind:value={searchQuery}
-							class="panel-search-input"
-							style="margin-bottom: 6px;"
-						/>
-						<div class="flex gap-1.5 mb-1.5">
+					<div class="panel-card" style="padding: 6px 8px;">
+						<div class="flex gap-1 items-center mb-1">
+							<input
+								type="text"
+								placeholder="Search..."
+								bind:value={searchQuery}
+								class="panel-search-input flex-1"
+							/>
 							<select bind:value={filterPos}
-								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
-								<option value="">All Pos</option>
+								class="w-[52px] px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								<option value="">Pos</option>
 								<option value="1">GKP</option>
 								<option value="2">DEF</option>
 								<option value="3">MID</option>
 								<option value="4">FWD</option>
 							</select>
 							<select bind:value={filterTeam}
-								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
-								<option value="">All Teams</option>
+								class="w-[56px] px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								<option value="">Team</option>
 								{#each availableTeams as team}
 									<option value={team}>{team}</option>
 								{/each}
 							</select>
-							<input
-								type="number"
-								placeholder="Max £M"
-								bind:value={maxPriceFilter}
-								step="0.5"
-								min="3.5"
-								max="15"
-								class="w-16 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]"
-							/>
-						</div>
-						<div class="flex gap-1.5">
-							<select bind:value={sortBy} onchange={() => sortAsc = false}
-								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
-								<optgroup label="Expected Points">
-									<option value="twxp">TWxP (8wk, decay-weighted)</option>
-									<option value="xpts_sum">xPts (8wk, raw sum)</option>
-									<option value="ep_next">xPts (next GW only)</option>
-								</optgroup>
-								<optgroup label="Underlying Stats">
-									<option value="xg">xG (season)</option>
-									<option value="xa">xA (season)</option>
-									<option value="xgi">xGI (season)</option>
-								</optgroup>
-								<optgroup label="FPL Stats">
-									<option value="form">Form</option>
-									<option value="points">Total Pts</option>
-									<option value="transfers_in">Transfers In (GW)</option>
-									<option value="minutes">Minutes</option>
-									<option value="clean_sheets">Clean Sheets</option>
-									<option value="price">Price</option>
-								</optgroup>
+							<select bind:value={maxPriceFilter}
+								class="w-[52px] px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								<option value="">Max £</option>
+								<option value="4.5">4.5</option>
+								<option value="5.0">5.0</option>
+								<option value="5.5">5.5</option>
+								<option value="6.0">6.0</option>
+								<option value="6.5">6.5</option>
+								<option value="7.0">7.0</option>
+								<option value="7.5">7.5</option>
+								<option value="8.0">8.0</option>
+								<option value="9.0">9.0</option>
+								<option value="10.0">10.0</option>
+								<option value="11.0">11.0</option>
+								<option value="12.0">12.0</option>
+								<option value="13.0">13.0</option>
+								<option value="15.0">15.0</option>
 							</select>
 						</div>
+						<select bind:value={sortBy} onchange={() => sortAsc = false}
+							class="w-full px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+							<optgroup label="Expected Points">
+								<option value="twxp8">TWxP 8wk (decay-weighted)</option>
+								<option value="twxp6">TWxP 6wk (decay-weighted)</option>
+								<option value="xpts8">xPts 8wk (raw sum)</option>
+								<option value="xpts6">xPts 6wk (raw sum)</option>
+								<option value="ep_next">xPts next GW</option>
+							</optgroup>
+							<optgroup label="Underlying Stats">
+								<option value="xg">xG (season)</option>
+								<option value="xa">xA (season)</option>
+								<option value="xgi">xGI (season)</option>
+							</optgroup>
+							<optgroup label="FPL Stats">
+								<option value="form">Form</option>
+								<option value="points">Total Pts</option>
+								<option value="transfers_in">Transfers In (GW)</option>
+								<option value="minutes">Minutes</option>
+								<option value="clean_sheets">Clean Sheets</option>
+								<option value="price">Price</option>
+							</optgroup>
+						</select>
 					</div>
 
-					<!-- Column headers -->
-					<div class="overflow-x-auto">
-						<div class="min-w-[380px]">
-							<div class="grid items-center px-2 py-1.5 text-[7px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)] gap-x-1"
-								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 32px) 44px;">
-								<span></span>
-								<span>Player</span>
-								<button onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}
-									class="text-center cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">£{sortBy === 'price' ? (sortAsc ? '↑' : '↓') : ''}</button>
-								{#each panelGwColumns as gw}
-									<button onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}
-										class="text-center cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}">GW{gw}</button>
-								{/each}
-								<button onclick={() => sortAsc = !sortAsc}
-									class="text-center cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
-									{#if sortBy === 'twxp'}TWxP{:else if sortBy === 'xpts_sum'}Σ xP{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Form{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TrIn{:else if sortBy === 'xg'}xG{:else if sortBy === 'xa'}xA{:else if sortBy === 'xgi'}xGI{:else if sortBy === 'clean_sheets'}CS{:else if sortBy === 'minutes'}Min{:else if sortBy === 'price'}£{:else}{sortBy}{/if}
-									{sortAsc ? '↑' : '↓'}
-								</button>
-							</div>
-						</div>
-					</div>
-
-					<!-- Player list with GW colour-coded cells -->
-					<div class="panel-results overflow-x-auto">
-						<div class="min-w-[380px]">
-						{#if searchResults.length > 0}
-							{#each searchResults as player}
-								<button
-									onclick={() => transferOutPlayer ? completeTransfer(player) : null}
-									disabled={!transferOutPlayer}
-									class="w-full grid items-center px-2 py-1.5 gap-x-1 hover:bg-white/[0.03] transition-colors text-left border-b border-[var(--color-surface-4)]/30 {!transferOutPlayer ? 'opacity-70 cursor-default' : 'cursor-pointer'}"
-									style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 32px) 44px;"
-								>
-									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7" />
-									<div class="min-w-0">
-										<div class="text-[10px] font-medium truncate text-[var(--color-text-0)]">{player.web_name}</div>
-										<div class="text-[8px] text-[var(--color-text-3)]">{player.team_short}</div>
-									</div>
-									<div class="text-center font-mono text-[9px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
+					<!-- Column headers + player list -->
+					<div class="panel-results overflow-y-auto">
+						<table class="w-full text-[9px] border-collapse">
+							<thead class="sticky top-0 bg-[var(--color-surface-2)] z-10">
+								<tr class="text-[7px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)]">
+									<th class="w-6 py-1"></th>
+									<th class="text-left py-1 pl-1">Player</th>
+									<th class="w-9 text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}"
+										onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}>£</th>
 									{#each panelGwColumns as gw}
-										{@const pts = getPlayerGwPtsPanel(player, gw)}
-										<div class="text-center font-mono text-[9px] rounded px-0.5 py-0.5"
-											style="background: {pts !== null ? panelGwCellColor(pts, gw) : 'transparent'}">
-											{pts !== null ? pts.toFixed(1) : '-'}
-										</div>
+										<th class="w-8 text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}"
+											onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}>{gw}</th>
 									{/each}
-									<div class="text-center font-mono text-[9px] font-semibold text-[var(--color-accent-light)]">
-										{#if sortBy === 'twxp'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
-										{:else if sortBy === 'xpts_sum'}{(player.projections || []).reduce((s, p) => s + p.pts, 0).toFixed(1)}
-										{:else if sortBy === 'price'}{formatPrice(player.now_cost)}
-										{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
-										{:else if sortBy === 'form'}{player.form || '-'}
-										{:else if sortBy === 'points'}{player.total_points || 0}
-										{:else if sortBy === 'transfers_in'}{(player.transfers_in_event || 0).toLocaleString()}
-										{:else if sortBy === 'xg'}{player.expected_goals || '-'}
-										{:else if sortBy === 'xa'}{player.expected_assists || '-'}
-										{:else if sortBy === 'xgi'}{player.expected_goal_involvements || '-'}
-										{:else if sortBy === 'clean_sheets'}{player.clean_sheets || 0}
-										{:else if sortBy === 'minutes'}{player.minutes || 0}
-										{:else if sortBy === 'gw'}{getPlayerGwPtsPanel(player, sortGw)?.toFixed(1) || '-'}
-										{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
-										{/if}
-									</div>
-								</button>
-							{/each}
-						{:else if allPlayersLoaded}
-							<div class="p-4 text-center text-[var(--color-text-2)] text-[10px]">No players match</div>
-						{:else}
-							<div class="p-4 text-center text-[var(--color-text-2)] text-[10px]">Loading...</div>
-						{/if}
-						</div>
+									<th class="w-10 text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]"
+										onclick={() => sortAsc = !sortAsc}>
+										{#if sortBy === 'twxp8'}TWxP{:else if sortBy === 'twxp6'}TW6{:else if sortBy === 'xpts8'}Σ8{:else if sortBy === 'xpts6'}Σ6{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Frm{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TrI{:else if sortBy === 'xg'}xG{:else if sortBy === 'xa'}xA{:else if sortBy === 'xgi'}xGI{:else if sortBy === 'clean_sheets'}CS{:else if sortBy === 'minutes'}Min{:else if sortBy === 'price'}£{:else}Val{/if}
+										{sortAsc ? '↑' : '↓'}
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+							{#if searchResults.length > 0}
+								{#each searchResults as player}
+									<tr
+										onclick={() => transferOutPlayer ? completeTransfer(player) : null}
+										class="border-b border-[var(--color-surface-4)]/30 hover:bg-white/[0.03] transition-colors {transferOutPlayer ? 'cursor-pointer' : 'opacity-70'}"
+									>
+										<td class="py-1 pl-1"><img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7" /></td>
+										<td class="py-1 pl-1">
+											<div class="text-[10px] font-medium truncate text-[var(--color-text-0)] max-w-[90px]">{player.web_name}</div>
+											<div class="text-[8px] text-[var(--color-text-3)]">{player.team_short}</div>
+										</td>
+										<td class="text-center font-mono text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</td>
+										{#each panelGwColumns as gw}
+											{@const pts = getPlayerGwPtsPanel(player, gw)}
+											<td class="text-center font-mono rounded"
+												style="background: {pts !== null ? panelGwCellColor(pts, gw) : 'transparent'}">
+												{pts !== null ? pts.toFixed(1) : '-'}
+											</td>
+										{/each}
+										<td class="text-center font-mono font-semibold text-[var(--color-accent-light)]">
+											{#if sortBy === 'twxp8'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+											{:else if sortBy === 'twxp6'}{calculatePlayerTWxP((player.projections || []).slice(0, 6)).toFixed(1)}
+											{:else if sortBy === 'xpts8'}{(player.projections || []).slice(0, 8).reduce((s, p) => s + p.pts, 0).toFixed(1)}
+											{:else if sortBy === 'xpts6'}{(player.projections || []).slice(0, 6).reduce((s, p) => s + p.pts, 0).toFixed(1)}
+											{:else if sortBy === 'price'}{formatPrice(player.now_cost)}
+											{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
+											{:else if sortBy === 'form'}{player.form || '-'}
+											{:else if sortBy === 'points'}{player.total_points || 0}
+											{:else if sortBy === 'transfers_in'}{(player.transfers_in_event || 0).toLocaleString()}
+											{:else if sortBy === 'xg'}{player.expected_goals || '-'}
+											{:else if sortBy === 'xa'}{player.expected_assists || '-'}
+											{:else if sortBy === 'xgi'}{player.expected_goal_involvements || '-'}
+											{:else if sortBy === 'clean_sheets'}{player.clean_sheets || 0}
+											{:else if sortBy === 'minutes'}{player.minutes || 0}
+											{:else if sortBy === 'gw'}{getPlayerGwPtsPanel(player, sortGw)?.toFixed(1) || '-'}
+											{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+											{/if}
+										</td>
+									</tr>
+								{/each}
+							{:else if allPlayersLoaded}
+								<tr><td colspan="99" class="p-4 text-center text-[var(--color-text-2)] text-[10px]">No players match</td></tr>
+							{:else}
+								<tr><td colspan="99" class="p-4 text-center text-[var(--color-text-2)] text-[10px]">Loading...</td></tr>
+							{/if}
+							</tbody>
+						</table>
 					</div>
 				</div>
 			</aside>
