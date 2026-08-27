@@ -995,17 +995,17 @@
 						</div>
 					{/if}
 
-					<!-- Filters (always visible) -->
+					<!-- Filters -->
 					<div class="panel-card" style="padding: 6px 8px;">
-						<div class="flex gap-1 items-center mb-1">
-							<input
-								type="text"
-								placeholder="Search..."
-								bind:value={searchQuery}
-								class="panel-search-input flex-1"
-							/>
+						<input
+							type="text"
+							placeholder="Search players..."
+							bind:value={searchQuery}
+							class="panel-search-input w-full mb-1.5"
+						/>
+						<div class="flex gap-1 items-center">
 							<select bind:value={filterPos}
-								class="w-[52px] px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								class="px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
 								<option value="">Pos</option>
 								<option value="1">GKP</option>
 								<option value="2">DEF</option>
@@ -1013,14 +1013,14 @@
 								<option value="4">FWD</option>
 							</select>
 							<select bind:value={filterTeam}
-								class="w-[56px] px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								class="px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
 								<option value="">Team</option>
 								{#each availableTeams as team}
 									<option value={team}>{team}</option>
 								{/each}
 							</select>
 							<select bind:value={maxPriceFilter}
-								class="w-[52px] px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								class="px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
 								<option value="">Max £</option>
 								<option value="4.5">4.5</option>
 								<option value="5.0">5.0</option>
@@ -1032,35 +1032,33 @@
 								<option value="8.0">8.0</option>
 								<option value="9.0">9.0</option>
 								<option value="10.0">10.0</option>
-								<option value="11.0">11.0</option>
 								<option value="12.0">12.0</option>
-								<option value="13.0">13.0</option>
 								<option value="15.0">15.0</option>
 							</select>
+							<select bind:value={sortBy} onchange={() => sortAsc = false}
+								class="flex-1 px-1 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
+								<optgroup label="Expected Points">
+									<option value="twxp8">TWxP 8wk</option>
+									<option value="twxp6">TWxP 6wk</option>
+									<option value="xpts8">xPts 8wk</option>
+									<option value="xpts6">xPts 6wk</option>
+									<option value="ep_next">Next GW</option>
+								</optgroup>
+								<optgroup label="Underlying">
+									<option value="xg">xG</option>
+									<option value="xa">xA</option>
+									<option value="xgi">xGI</option>
+								</optgroup>
+								<optgroup label="FPL">
+									<option value="form">Form</option>
+									<option value="points">Total Pts</option>
+									<option value="transfers_in">Transfers In</option>
+									<option value="minutes">Minutes</option>
+									<option value="clean_sheets">CS</option>
+									<option value="price">Price</option>
+								</optgroup>
+							</select>
 						</div>
-						<select bind:value={sortBy} onchange={() => sortAsc = false}
-							class="w-full px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
-							<optgroup label="Expected Points">
-								<option value="twxp8">TWxP 8wk (decay-weighted)</option>
-								<option value="twxp6">TWxP 6wk (decay-weighted)</option>
-								<option value="xpts8">xPts 8wk (raw sum)</option>
-								<option value="xpts6">xPts 6wk (raw sum)</option>
-								<option value="ep_next">xPts next GW</option>
-							</optgroup>
-							<optgroup label="Underlying Stats">
-								<option value="xg">xG (season)</option>
-								<option value="xa">xA (season)</option>
-								<option value="xgi">xGI (season)</option>
-							</optgroup>
-							<optgroup label="FPL Stats">
-								<option value="form">Form</option>
-								<option value="points">Total Pts</option>
-								<option value="transfers_in">Transfers In (GW)</option>
-								<option value="minutes">Minutes</option>
-								<option value="clean_sheets">Clean Sheets</option>
-								<option value="price">Price</option>
-							</optgroup>
-						</select>
 					</div>
 
 					<!-- Column headers + player list -->
