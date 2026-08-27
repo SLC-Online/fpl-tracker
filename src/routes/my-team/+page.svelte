@@ -1064,81 +1064,76 @@
 					</div>
 
 					<!-- Column headers + player list -->
-					<div class="panel-results overflow-y-auto">
-						<!-- Header -->
-						<div class="flex items-center text-[7px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)] py-1">
-							<div class="flex-shrink-0 w-[100px] pl-2">Player</div>
-							<div class="flex-1 overflow-x-auto flex items-center gap-0 scrollbar-none">
-								<span class="w-9 text-center flex-shrink-0 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}"
-									onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}>£</span>
-								{#each panelGwColumns as gw}
-									<span class="w-8 text-center flex-shrink-0 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}"
-										onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}>{gw}</span>
-								{/each}
-							</div>
-							<div class="flex-shrink-0 w-[44px] text-center cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]"
-								onclick={() => sortAsc = !sortAsc}>
-								{#if sortBy === 'twxp8'}TWxP{:else if sortBy === 'twxp6'}TW6{:else if sortBy === 'xpts8'}Σ8{:else if sortBy === 'xpts6'}Σ6{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Frm{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TrI{:else if sortBy === 'xg'}xG{:else if sortBy === 'xa'}xA{:else if sortBy === 'xgi'}xGI{:else if sortBy === 'clean_sheets'}CS{:else if sortBy === 'minutes'}Min{:else if sortBy === 'price'}£{:else}Val{/if}
-								{sortAsc ? '↑' : '↓'}
-							</div>
-						</div>
-
-						<!-- Player rows -->
-						{#if searchResults.length > 0}
-							{#each searchResults as player}
-								<button
-									onclick={() => transferOutPlayer ? completeTransfer(player) : null}
-									disabled={!transferOutPlayer}
-									class="w-full flex items-center py-1.5 border-b border-[var(--color-surface-4)]/30 hover:bg-white/[0.03] transition-colors text-left text-[9px] {!transferOutPlayer ? 'opacity-70 cursor-default' : 'cursor-pointer'}"
-								>
-									<!-- Pinned left: shirt + name -->
-									<div class="flex-shrink-0 w-[100px] flex items-center gap-1.5 pl-2 min-w-0">
-										<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7 flex-shrink-0" />
-										<div class="min-w-0">
-											<div class="text-[10px] font-medium truncate text-[var(--color-text-0)]">{player.web_name}</div>
-											<div class="text-[8px] text-[var(--color-text-3)]">{player.team_short}</div>
-										</div>
-									</div>
-
-									<!-- Scrollable middle: price + GW cells -->
-									<div class="flex-1 overflow-x-auto flex items-center gap-0 scrollbar-none">
-										<span class="w-9 text-center font-mono flex-shrink-0 text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</span>
+					<div class="panel-results overflow-x-auto overflow-y-auto scrollbar-none">
+						<table class="w-full text-[9px] border-collapse" style="min-width: {100 + 36 + (panelGwColumns.length * 32) + 44}px;">
+							<thead class="sticky top-0 bg-[var(--color-surface-2)] z-10">
+								<tr class="text-[7px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)]">
+									<th class="sticky left-0 bg-[var(--color-surface-2)] z-20 text-left py-1 pl-2 pr-1" style="min-width:100px;">Player</th>
+									<th class="text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}" style="min-width:36px;"
+										onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}>£</th>
+									{#each panelGwColumns as gw}
+										<th class="text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}" style="min-width:32px;"
+											onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}>{gw}</th>
+									{/each}
+									<th class="sticky right-0 bg-[var(--color-surface-2)] z-20 text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]" style="min-width:44px;"
+										onclick={() => sortAsc = !sortAsc}>
+										{#if sortBy === 'twxp8'}TWxP{:else if sortBy === 'twxp6'}TW6{:else if sortBy === 'xpts8'}Σ8{:else if sortBy === 'xpts6'}Σ6{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Frm{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TrI{:else if sortBy === 'xg'}xG{:else if sortBy === 'xa'}xA{:else if sortBy === 'xgi'}xGI{:else if sortBy === 'clean_sheets'}CS{:else if sortBy === 'minutes'}Min{:else if sortBy === 'price'}£{:else}Val{/if}
+										{sortAsc ? '↑' : '↓'}
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+							{#if searchResults.length > 0}
+								{#each searchResults as player}
+									<tr
+										onclick={() => transferOutPlayer ? completeTransfer(player) : null}
+										class="border-b border-[var(--color-surface-4)]/30 hover:bg-white/[0.03] transition-colors {transferOutPlayer ? 'cursor-pointer' : 'opacity-70'}"
+									>
+										<td class="sticky left-0 bg-[var(--color-surface-2)] z-10 py-1 pl-2 pr-1">
+											<div class="flex items-center gap-1.5">
+												<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7 flex-shrink-0" />
+												<div class="min-w-0">
+													<div class="text-[10px] font-medium truncate text-[var(--color-text-0)] max-w-[70px]">{player.web_name}</div>
+													<div class="text-[8px] text-[var(--color-text-3)]">{player.team_short}</div>
+												</div>
+											</div>
+										</td>
+										<td class="text-center font-mono text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</td>
 										{#each panelGwColumns as gw}
 											{@const pts = getPlayerGwPtsPanel(player, gw)}
-											<span class="w-8 text-center font-mono flex-shrink-0 rounded py-0.5"
+											<td class="text-center font-mono rounded"
 												style="background: {pts !== null ? panelGwCellColor(pts, gw) : 'transparent'}">
 												{pts !== null ? pts.toFixed(1) : '-'}
-											</span>
+											</td>
 										{/each}
-									</div>
-
-									<!-- Pinned right: dynamic value -->
-									<div class="flex-shrink-0 w-[44px] text-center font-mono font-semibold text-[var(--color-accent-light)]">
-										{#if sortBy === 'twxp8'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
-										{:else if sortBy === 'twxp6'}{calculatePlayerTWxP((player.projections || []).slice(0, 6)).toFixed(1)}
-										{:else if sortBy === 'xpts8'}{(player.projections || []).slice(0, 8).reduce((s, p) => s + p.pts, 0).toFixed(1)}
-										{:else if sortBy === 'xpts6'}{(player.projections || []).slice(0, 6).reduce((s, p) => s + p.pts, 0).toFixed(1)}
-										{:else if sortBy === 'price'}{formatPrice(player.now_cost)}
-										{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
-										{:else if sortBy === 'form'}{player.form || '-'}
-										{:else if sortBy === 'points'}{player.total_points || 0}
-										{:else if sortBy === 'transfers_in'}{(player.transfers_in_event || 0).toLocaleString()}
-										{:else if sortBy === 'xg'}{player.expected_goals || '-'}
-										{:else if sortBy === 'xa'}{player.expected_assists || '-'}
-										{:else if sortBy === 'xgi'}{player.expected_goal_involvements || '-'}
-										{:else if sortBy === 'clean_sheets'}{player.clean_sheets || 0}
-										{:else if sortBy === 'minutes'}{player.minutes || 0}
-										{:else if sortBy === 'gw'}{getPlayerGwPtsPanel(player, sortGw)?.toFixed(1) || '-'}
-										{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
-										{/if}
-									</div>
-								</button>
-							{/each}
-						{:else if allPlayersLoaded}
-							<div class="p-4 text-center text-[var(--color-text-2)] text-[10px]">No players match</div>
-						{:else}
-							<div class="p-4 text-center text-[var(--color-text-2)] text-[10px]">Loading...</div>
-						{/if}
+										<td class="sticky right-0 bg-[var(--color-surface-2)] z-10 text-center font-mono font-semibold text-[var(--color-accent-light)]">
+											{#if sortBy === 'twxp8'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+											{:else if sortBy === 'twxp6'}{calculatePlayerTWxP((player.projections || []).slice(0, 6)).toFixed(1)}
+											{:else if sortBy === 'xpts8'}{(player.projections || []).slice(0, 8).reduce((s, p) => s + p.pts, 0).toFixed(1)}
+											{:else if sortBy === 'xpts6'}{(player.projections || []).slice(0, 6).reduce((s, p) => s + p.pts, 0).toFixed(1)}
+											{:else if sortBy === 'price'}{formatPrice(player.now_cost)}
+											{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
+											{:else if sortBy === 'form'}{player.form || '-'}
+											{:else if sortBy === 'points'}{player.total_points || 0}
+											{:else if sortBy === 'transfers_in'}{(player.transfers_in_event || 0).toLocaleString()}
+											{:else if sortBy === 'xg'}{player.expected_goals || '-'}
+											{:else if sortBy === 'xa'}{player.expected_assists || '-'}
+											{:else if sortBy === 'xgi'}{player.expected_goal_involvements || '-'}
+											{:else if sortBy === 'clean_sheets'}{player.clean_sheets || 0}
+											{:else if sortBy === 'minutes'}{player.minutes || 0}
+											{:else if sortBy === 'gw'}{getPlayerGwPtsPanel(player, sortGw)?.toFixed(1) || '-'}
+											{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+											{/if}
+										</td>
+									</tr>
+								{/each}
+							{:else if allPlayersLoaded}
+								<tr><td colspan="99" class="p-4 text-center text-[var(--color-text-2)] text-[10px]">No players match</td></tr>
+							{:else}
+								<tr><td colspan="99" class="p-4 text-center text-[var(--color-text-2)] text-[10px]">Loading...</td></tr>
+							{/if}
+							</tbody>
+						</table>
 					</div>
 				</div>
 			</aside>
