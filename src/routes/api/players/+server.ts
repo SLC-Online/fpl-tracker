@@ -71,36 +71,25 @@ export const GET: RequestHandler = async ({ url }) => {
 		.single();
 	const nextGw = nextEvent?.event_id || 2;
 
-	// Get Transfer Algorithm source (the definitive source for all calculations)
-	const { data: taSource } = await supabaseAdmin
-		.from('projection_sources')
-		.select('id')
-		.eq('source_name', 'transfer_algorithm')
-		.limit(1)
-		.single();
-	const taSourceId = taSource?.id;
-
-	// Get latest upload (TA only)
+	// Get latest upload from final projections
 	const { data: latestUpload } = await supabaseAdmin
-		.from('projection_inputs')
+		.from('final_projections')
 		.select('uploaded_for_gw')
-		.eq('source_id', taSourceId)
 		.order('uploaded_for_gw', { ascending: false })
 		.limit(1)
 		.single();
 	const latestUploadGw = latestUpload?.uploaded_for_gw || 1;
 
-	// Fetch projections in batches — Transfer Algorithm source only
+	// Fetch final projections (definitive numbers) in batches
 	const projMap = new Map<number, { gw: number; pts: number }[]>();
 
 	const BATCH_SIZE = 80;
 	for (let i = 0; i < elementIds.length; i += BATCH_SIZE) {
 		const batch = elementIds.slice(i, i + BATCH_SIZE);
 		const { data: projBatch } = await supabaseAdmin
-			.from('projection_inputs')
+			.from('final_projections')
 			.select('element_id, gameweek, expected_points')
 			.in('element_id', batch)
-			.eq('source_id', taSourceId)
 			.eq('uploaded_for_gw', latestUploadGw)
 			.gte('gameweek', nextGw)
 			.lte('gameweek', nextGw + 7)
@@ -113,11 +102,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 	}
 
-	// Also get meta (BCV) from projection_inputs (TA source, latest upload only)
+	// Get BCV from final projections meta
 	const { data: metaData } = await supabaseAdmin
-		.from('projection_inputs')
+		.from('final_projections')
 		.select('element_id, meta')
-		.eq('source_id', taSourceId)
 		.eq('uploaded_for_gw', latestUploadGw)
 		.eq('gameweek', nextGw)
 		.limit(1000);
