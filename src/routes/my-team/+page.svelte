@@ -880,6 +880,7 @@
 				{:else}
 					<!-- LIST VIEW -->
 					<section class="list-view">
+						<div class="list-inner">
 						<div class="list-header" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
 							<span>Player</span>
 							<span class="text-center">Pos</span>
@@ -967,6 +968,7 @@
 									</div>
 								</div>
 							{/each}
+						</div>
 						</div>
 					</section>
 				{/if}
@@ -1659,7 +1661,12 @@
 		border-radius: 14px;
 		background: var(--color-surface-2);
 		border: 1px solid var(--color-surface-4);
-		overflow: hidden;
+		overflow-x: auto;
+		overflow-y: hidden;
+	}
+
+	.list-inner {
+		min-width: 580px;
 	}
 
 	.list-header {

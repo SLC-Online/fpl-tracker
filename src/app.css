@@ -113,9 +113,9 @@ body {
 	            0 4px 16px -2px rgba(0, 0, 0, 0.4);
 }
 
-/* Smooth transitions */
-* {
-	transition-property: background-color, border-color, box-shadow, opacity;
+/* Smooth transitions (scoped to interactive elements only) */
+a, button, input, select, [class*="hover:"] {
+	transition-property: background-color, border-color, box-shadow, opacity, color;
 	transition-duration: 150ms;
 	transition-timing-function: ease;
 }
