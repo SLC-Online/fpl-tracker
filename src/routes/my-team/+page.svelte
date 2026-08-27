@@ -444,7 +444,7 @@
 	// GW columns available in the player data (for the right panel table)
 	let panelGwColumns = $derived.by(() => {
 		const gws = new Set<number>();
-		for (const p of searchResults) {
+		for (const p of allPlayers) {
 			for (const proj of (p.projections || [])) {
 				gws.add(proj.gw);
 			}
