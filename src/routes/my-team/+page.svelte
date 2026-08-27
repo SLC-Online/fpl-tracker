@@ -40,7 +40,8 @@
 	let searchQuery = $state('');
 	let filterTeam = $state('');
 	let filterPos = $state('');
-	let sortBy: 'twxp' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' | 'gw' = $state('twxp');
+	let maxPriceFilter = $state('');
+	let sortBy: 'twxp' | 'xpts_sum' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' | 'xa' | 'xgi' | 'clean_sheets' | 'minutes' | 'gw' = $state('twxp');
 	let sortAsc = $state(false);
 	let sortGw = $state(0);  // Which specific GW to sort by (when sortBy === 'gw')
 
@@ -373,10 +374,12 @@
 		const squadIds = new Set(workingSquad.map(p => p.element_id));
 		const q = searchQuery ? stripAccents(searchQuery) : '';
 
-		// Budget: only filter if toggle is on AND a player is selected
-		const maxBudget = (budgetFilterOn && transferOutPlayer)
+		// Budget: use manual max price if set, otherwise use affordability toggle
+		const manualMax = maxPriceFilter ? parseFloat(maxPriceFilter) * 10 : 0;  // Convert £M to tenths
+		const affordableMax = (budgetFilterOn && transferOutPlayer)
 			? workingBank + transferOutPlayer.selling_price
 			: Infinity;
+		const maxBudget = manualMax > 0 ? Math.min(manualMax, affordableMax) : affordableMax;
 
 		return allPlayers
 			.filter(p => {
@@ -396,12 +399,21 @@
 			.sort((a, b) => {
 				let diff = 0;
 				if (sortBy === 'twxp') diff = calculatePlayerTWxP(b.projections || []) - calculatePlayerTWxP(a.projections || []);
+				else if (sortBy === 'xpts_sum') {
+					const aSum = (a.projections || []).reduce((s: number, p: any) => s + p.pts, 0);
+					const bSum = (b.projections || []).reduce((s: number, p: any) => s + p.pts, 0);
+					diff = bSum - aSum;
+				}
 				else if (sortBy === 'price') diff = b.now_cost - a.now_cost;
 				else if (sortBy === 'form') diff = parseFloat(b.form || '0') - parseFloat(a.form || '0');
 				else if (sortBy === 'points') diff = (b.total_points || 0) - (a.total_points || 0);
 				else if (sortBy === 'ep_next') diff = parseFloat(b.ep_next || '0') - parseFloat(a.ep_next || '0');
 				else if (sortBy === 'transfers_in') diff = (b.transfers_in_event || 0) - (a.transfers_in_event || 0);
 				else if (sortBy === 'xg') diff = parseFloat(b.expected_goals || '0') - parseFloat(a.expected_goals || '0');
+				else if (sortBy === 'xa') diff = parseFloat(b.expected_assists || '0') - parseFloat(a.expected_assists || '0');
+				else if (sortBy === 'xgi') diff = parseFloat(b.expected_goal_involvements || '0') - parseFloat(a.expected_goal_involvements || '0');
+				else if (sortBy === 'clean_sheets') diff = (b.clean_sheets || 0) - (a.clean_sheets || 0);
+				else if (sortBy === 'minutes') diff = (b.minutes || 0) - (a.minutes || 0);
 				else if (sortBy === 'gw') {
 					const aProj = (a.projections || []).find((p: any) => p.gw === sortGw);
 					const bProj = (b.projections || []).find((p: any) => p.gw === sortGw);
@@ -984,7 +996,7 @@
 							class="panel-search-input"
 							style="margin-bottom: 6px;"
 						/>
-						<div class="flex gap-1.5">
+						<div class="flex gap-1.5 mb-1.5">
 							<select bind:value={filterPos}
 								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
 								<option value="">All Pos</option>
@@ -1000,35 +1012,57 @@
 									<option value={team}>{team}</option>
 								{/each}
 							</select>
+							<input
+								type="number"
+								placeholder="Max £M"
+								bind:value={maxPriceFilter}
+								step="0.5"
+								min="3.5"
+								max="15"
+								class="w-16 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]"
+							/>
+						</div>
+						<div class="flex gap-1.5">
 							<select bind:value={sortBy} onchange={() => sortAsc = false}
 								class="flex-1 px-1.5 py-1 rounded bg-[var(--color-surface-0)] border border-[var(--color-surface-4)] text-[var(--color-text-1)] text-[9px] focus:outline-none focus:border-[var(--color-accent)]">
-								<option value="twxp">xPts (8wk)</option>
-								<option value="ep_next">Next GW xPts</option>
-								<option value="price">Price</option>
-								<option value="form">Form</option>
-								<option value="points">Total Pts</option>
-								<option value="transfers_in">GW Transfers In</option>
-								<option value="xg">xG</option>
+								<optgroup label="Expected Points">
+									<option value="twxp">TWxP (8wk, decay-weighted)</option>
+									<option value="xpts_sum">xPts (8wk, raw sum)</option>
+									<option value="ep_next">xPts (next GW only)</option>
+								</optgroup>
+								<optgroup label="Underlying Stats">
+									<option value="xg">xG (season)</option>
+									<option value="xa">xA (season)</option>
+									<option value="xgi">xGI (season)</option>
+								</optgroup>
+								<optgroup label="FPL Stats">
+									<option value="form">Form</option>
+									<option value="points">Total Pts</option>
+									<option value="transfers_in">Transfers In (GW)</option>
+									<option value="minutes">Minutes</option>
+									<option value="clean_sheets">Clean Sheets</option>
+									<option value="price">Price</option>
+								</optgroup>
 							</select>
 						</div>
 					</div>
 
 					<!-- Column headers -->
 					<div class="overflow-x-auto">
-						<div class="min-w-[350px]">
+						<div class="min-w-[380px]">
 							<div class="grid items-center px-2 py-1.5 text-[7px] text-[var(--color-text-3)] uppercase tracking-widest border-b border-[var(--color-surface-4)] gap-x-1"
-								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 30px) 40px;">
+								style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 32px) 44px;">
 								<span></span>
 								<span>Player</span>
 								<button onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}
-									class="text-right cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">£{sortBy === 'price' ? (sortAsc ? '↑' : '↓') : ''}</button>
+									class="text-center cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}">£{sortBy === 'price' ? (sortAsc ? '↑' : '↓') : ''}</button>
 								{#each panelGwColumns as gw}
 									<button onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}
-										class="text-center cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}">{gw}</button>
+										class="text-center cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}">GW{gw}</button>
 								{/each}
 								<button onclick={() => sortAsc = !sortAsc}
-									class="text-right cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
-									{#if sortBy === 'twxp'}Σ{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Frm{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TI{:else if sortBy === 'xg'}xG{:else if sortBy === 'price'}£{:else}{sortBy}{/if}
+									class="text-center cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]">
+									{#if sortBy === 'twxp'}TWxP{:else if sortBy === 'xpts_sum'}Σ xP{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Form{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TrIn{:else if sortBy === 'xg'}xG{:else if sortBy === 'xa'}xA{:else if sortBy === 'xgi'}xGI{:else if sortBy === 'clean_sheets'}CS{:else if sortBy === 'minutes'}Min{:else if sortBy === 'price'}£{:else}{sortBy}{/if}
 									{sortAsc ? '↑' : '↓'}
 								</button>
 							</div>
@@ -1037,21 +1071,21 @@
 
 					<!-- Player list with GW colour-coded cells -->
 					<div class="panel-results overflow-x-auto">
-						<div class="min-w-[350px]">
+						<div class="min-w-[380px]">
 						{#if searchResults.length > 0}
 							{#each searchResults as player}
 								<button
 									onclick={() => transferOutPlayer ? completeTransfer(player) : null}
 									disabled={!transferOutPlayer}
 									class="w-full grid items-center px-2 py-1.5 gap-x-1 hover:bg-white/[0.03] transition-colors text-left border-b border-[var(--color-surface-4)]/30 {!transferOutPlayer ? 'opacity-70 cursor-default' : 'cursor-pointer'}"
-									style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 30px) 40px;"
+									style="grid-template-columns: 28px 1fr 38px repeat({panelGwColumns.length}, 32px) 44px;"
 								>
 									<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7" />
 									<div class="min-w-0">
 										<div class="text-[10px] font-medium truncate text-[var(--color-text-0)]">{player.web_name}</div>
 										<div class="text-[8px] text-[var(--color-text-3)]">{player.team_short}</div>
 									</div>
-									<div class="text-right font-mono text-[9px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
+									<div class="text-center font-mono text-[9px] text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</div>
 									{#each panelGwColumns as gw}
 										{@const pts = getPlayerGwPtsPanel(player, gw)}
 										<div class="text-center font-mono text-[9px] rounded px-0.5 py-0.5"
@@ -1059,14 +1093,19 @@
 											{pts !== null ? pts.toFixed(1) : '-'}
 										</div>
 									{/each}
-									<div class="text-right font-mono text-[9px] font-semibold text-[var(--color-accent-light)]">
+									<div class="text-center font-mono text-[9px] font-semibold text-[var(--color-accent-light)]">
 										{#if sortBy === 'twxp'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+										{:else if sortBy === 'xpts_sum'}{(player.projections || []).reduce((s, p) => s + p.pts, 0).toFixed(1)}
 										{:else if sortBy === 'price'}{formatPrice(player.now_cost)}
 										{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
 										{:else if sortBy === 'form'}{player.form || '-'}
 										{:else if sortBy === 'points'}{player.total_points || 0}
 										{:else if sortBy === 'transfers_in'}{(player.transfers_in_event || 0).toLocaleString()}
 										{:else if sortBy === 'xg'}{player.expected_goals || '-'}
+										{:else if sortBy === 'xa'}{player.expected_assists || '-'}
+										{:else if sortBy === 'xgi'}{player.expected_goal_involvements || '-'}
+										{:else if sortBy === 'clean_sheets'}{player.clean_sheets || 0}
+										{:else if sortBy === 'minutes'}{player.minutes || 0}
 										{:else if sortBy === 'gw'}{getPlayerGwPtsPanel(player, sortGw)?.toFixed(1) || '-'}
 										{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
 										{/if}
