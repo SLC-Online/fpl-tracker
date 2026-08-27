@@ -119,3 +119,13 @@ a, button, input, select, [class*="hover:"] {
 	transition-duration: 150ms;
 	transition-timing-function: ease;
 }
+
+
+/* Hide scrollbar but allow scrolling */
+.scrollbar-none {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+	display: none;
+}
