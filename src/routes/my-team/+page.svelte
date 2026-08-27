@@ -1190,7 +1190,6 @@
 				← Load different team
 			</button>
 			<span class="text-[var(--color-text-3)] text-[10px] font-mono">
-				decay={DECAY} · bcv_threshold={BCV_THRESHOLD}
 			</span>
 		</footer>
 	</div>

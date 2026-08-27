@@ -62,7 +62,7 @@
 							<td class="p-4 text-right font-mono text-[var(--color-text-secondary)]">{formatPrice(pc.old_cost)}</td>
 							<td class="p-4 text-right font-mono">{formatPrice(pc.new_cost)}</td>
 							<td class="p-4 text-right font-mono {pc.change > 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}">
-								{pc.change > 0 ? '+' : ''}{formatPrice(pc.change * 10 + (pc.change > 0 ? 0 : 0))}
+								{pc.change > 0 ? '+' : ''}{formatPrice(pc.change)}
 							</td>
 							<td class="p-4 text-right text-[var(--color-text-secondary)]">{pc.selected_by_percent}%</td>
 							<td class="p-4 text-right text-[var(--color-text-2)] text-sm">
