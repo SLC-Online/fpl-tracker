@@ -95,10 +95,20 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		const nextGw = nextEvent?.event_id || 2;
 
-		// Get the latest uploaded_for_gw
+		// Get the Transfer Algorithm source (definitive for all calculations)
+		const { data: taSource } = await supabaseAdmin
+			.from('projection_sources')
+			.select('id')
+			.eq('source_name', 'transfer_algorithm')
+			.limit(1)
+			.single();
+		const taSourceId = taSource?.id;
+
+		// Get the latest uploaded_for_gw (TA only)
 		const { data: latestUpload } = await supabaseAdmin
 			.from('projection_inputs')
 			.select('uploaded_for_gw')
+			.eq('source_id', taSourceId)
 			.order('uploaded_for_gw', { ascending: false })
 			.limit(1)
 			.single();
@@ -109,6 +119,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			.from('projection_inputs')
 			.select('element_id, gameweek, expected_points, meta')
 			.in('element_id', elementIds)
+			.eq('source_id', taSourceId)
 			.eq('uploaded_for_gw', latestUploadGw)
 			.gte('gameweek', nextGw)
 			.lte('gameweek', nextGw + 7)
