@@ -1099,13 +1099,13 @@
 									<th class="sticky left-0 bg-[var(--color-surface-2)] z-20 text-left py-1.5 pl-2 pr-1" style="min-width:96px;">Player</th>
 									<th class="text-center py-1.5 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}"
 										onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}>£{sortBy === 'price' ? (sortAsc ? '↑' : '↓') : ''}</th>
-									<th class="text-center py-1.5 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'vfm' ? 'text-[var(--color-accent-light)]' : ''}"
-										onclick={() => { if (sortBy === 'vfm') { sortAsc = !sortAsc; } else { sortBy = 'vfm'; sortAsc = false; }}}
-										title="Value For Money">VFM{sortBy === 'vfm' ? (sortAsc ? '↑' : '↓') : ''}</th>
 									{#each panelGwColumns as gw}
 										<th class="text-center py-1.5 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}"
 											onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}>GW{gw}</th>
 									{/each}
+									<th class="text-center py-1.5 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'vfm' ? 'text-[var(--color-accent-light)]' : ''}"
+										onclick={() => { if (sortBy === 'vfm') { sortAsc = !sortAsc; } else { sortBy = 'vfm'; sortAsc = false; }}}
+										title="Value For Money">VFM{sortBy === 'vfm' ? (sortAsc ? '↑' : '↓') : ''}</th>
 									<th class="sticky right-0 bg-[var(--color-surface-2)] z-20 text-center py-1.5 pr-2 cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]"
 										onclick={() => sortAsc = !sortAsc}>
 										{#if sortBy === 'twxp8'}TWxP{:else if sortBy === 'twxp6'}TW6{:else if sortBy === 'xpts8'}Σ8{:else if sortBy === 'xpts6'}Σ6{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Frm{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TrI{:else if sortBy === 'xg'}xG{:else if sortBy === 'xa'}xA{:else if sortBy === 'xgi'}xGI{:else if sortBy === 'clean_sheets'}CS{:else if sortBy === 'minutes'}Min{:else if sortBy === 'price'}£{:else if sortBy === 'vfm'}VFM{:else}Val{/if}
@@ -1147,7 +1147,6 @@
 											</div>
 										</td>
 										<td class="text-center font-mono text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</td>
-										<td class="text-center font-mono {vfm != null ? 'text-[var(--color-text-1)]' : 'text-[var(--color-text-3)]'}">{formatVFM(vfm)}</td>
 										{#each panelGwColumns as gw}
 											{@const pts = getPlayerGwPtsPanel(player, gw)}
 											<td class="text-center font-mono rounded"
@@ -1155,6 +1154,7 @@
 												{pts !== null ? pts.toFixed(1) : '-'}
 											</td>
 										{/each}
+										<td class="text-center font-mono {vfm != null ? 'text-[var(--color-text-1)]' : 'text-[var(--color-text-3)]'}">{formatVFM(vfm)}</td>
 										<td class="sticky right-0 bg-[var(--color-surface-2)] z-10 text-center font-mono font-semibold text-[var(--color-accent-light)] pr-2">
 											{#if sortBy === 'twxp8'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
 											{:else if sortBy === 'twxp6'}{calculatePlayerTWxP((player.projections || []).slice(0, 6)).toFixed(1)}
