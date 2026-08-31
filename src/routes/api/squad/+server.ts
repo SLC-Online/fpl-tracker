@@ -121,13 +121,18 @@ export const GET: RequestHandler = async ({ url }) => {
 			.lte('gameweek', nextGw + 7)
 			.order('gameweek');
 
-		// Group projections by element_id
+		// Group projections by element_id + capture bcv (VFM source) from meta
 		const projectionMap = new Map<number, { gw: number; pts: number }[]>();
+		const bcvMap = new Map<number, number>();
 		for (const proj of projections || []) {
 			if (!projectionMap.has(proj.element_id)) {
 				projectionMap.set(proj.element_id, []);
 			}
 			projectionMap.get(proj.element_id)!.push({ gw: proj.gameweek, pts: proj.expected_points });
+			// bcv lives on the meta of the next-GW row; take the first non-null we see
+			if (!bcvMap.has(proj.element_id) && (proj as any).meta?.bcv != null) {
+				bcvMap.set(proj.element_id, (proj as any).meta.bcv);
+			}
 		}
 
 		// 9. Build the response
@@ -165,8 +170,9 @@ export const GET: RequestHandler = async ({ url }) => {
 				current_price: currentPrice,
 				purchase_price: purchasePrice,
 				selling_price: sellingPrice,
-				// Projections
+				// Projections + VFM (value-for-money, sourced from bcv)
 				projections: playerProjections,
+				bcv: bcvMap.get(pick.element) ?? null,
 			};
 		});
 

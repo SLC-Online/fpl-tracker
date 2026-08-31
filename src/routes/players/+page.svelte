@@ -2,6 +2,7 @@
 	import { teamBadgeUrl, POSITIONS } from '$lib/types';
 	import { calculatePlayerTWxP, DECAY } from '$lib/transfer-engine';
 	import { gwCellColorFromRatio } from '$lib/gw-colors';
+	import { computeVFM, formatVFM } from '$lib/vfm';
 	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
@@ -29,6 +30,11 @@
 		return calculatePlayerTWxP(projections);
 	}
 
+	function getVFM(elementId: number): number | null {
+		const csv = data.csvLookup?.[elementId];
+		return computeVFM({ bcv: csv?.bcv });
+	}
+
 	function getRemainingGws(elementId: number): { gw: number; pts: number; weight: number }[] {
 		const projections = data.projMap?.[elementId];
 		if (!projections || projections.length === 0) return [];
@@ -42,6 +48,7 @@
 
 	function getSortValue(row: any): number {
 		if (sortCol === 'twxp') return getTimeWeightedXP(row.element_id) ?? -999;
+		if (sortCol === 'vfm') return getVFM(row.element_id) ?? -999;
 		if (sortCol === 'total_points') return row.total_points ?? 0;
 		if (sortCol === 'now_cost') return row.now_cost ?? 0;
 		if (sortCol === 'form') return parseFloat(row.form || '0');
@@ -108,6 +115,7 @@
 
 	const columns = [
 		{ id: 'now_cost', label: 'Price' },
+		{ id: 'vfm', label: 'VFM' },
 		{ id: 'total_points', label: 'Pts' },
 		{ id: 'form', label: 'Form' },
 		{ id: 'selected_by_percent', label: 'Own%' },
@@ -177,6 +185,7 @@
 				{#each filteredPlayers as row (row.element_id)}
 					{@const player = getPlayer(row)}
 					{@const twxp = getTimeWeightedXP(row.element_id)}
+					{@const vfm = getVFM(row.element_id)}
 					{@const isExpanded = expandedId === row.element_id}
 					<!-- Main row -->
 					<tr class="border-b border-[var(--color-surface-4)]/50 hover:bg-[var(--color-surface-3)]/50 cursor-pointer transition-colors"
@@ -196,6 +205,7 @@
 							</div>
 						</td>
 						<td class="text-right px-3 py-3 font-mono text-sm">{formatPrice(row.now_cost)}</td>
+						<td class="text-right px-3 py-3 font-mono text-sm text-[var(--color-text-1)]">{formatVFM(vfm)}</td>
 						<td class="text-right px-3 py-3 font-mono text-sm font-semibold">{row.total_points}</td>
 						<td class="text-right px-3 py-3 font-mono text-sm text-[var(--color-text-1)] hidden sm:table-cell">{row.form || '-'}</td>
 						<td class="text-right px-3 py-3 font-mono text-sm text-[var(--color-text-2)] hidden md:table-cell">{row.selected_by_percent}%</td>
@@ -211,7 +221,7 @@
 					<!-- Expanded detail row -->
 					{#if isExpanded}
 						<tr class="bg-[var(--color-surface-3)]/30">
-							<td colspan="7" class="px-5 py-4">
+							<td colspan="8" class="px-5 py-4">
 								<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
 									{#if data.projMap?.[row.element_id]}
 										{@const remainingGws = getRemainingGws(row.element_id)}

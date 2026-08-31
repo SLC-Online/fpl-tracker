@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { teamBadgeUrl, POSITIONS } from '$lib/types';
 	import { gwCellColor } from '$lib/gw-colors';
+	import { playerVFM, formatVFM } from '$lib/vfm';
 	import {
 		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers,
 		transferPointsCost, isTransferWorthIt,
@@ -41,7 +42,7 @@
 	let filterTeam = $state('');
 	let filterPos = $state('');
 	let maxPriceFilter = $state('');
-	let sortBy: 'twxp8' | 'twxp6' | 'xpts8' | 'xpts6' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' | 'xa' | 'xgi' | 'clean_sheets' | 'minutes' | 'gw' = $state('twxp8');
+	let sortBy: 'twxp8' | 'twxp6' | 'xpts8' | 'xpts6' | 'vfm' | 'price' | 'form' | 'points' | 'ep_next' | 'transfers_in' | 'xg' | 'xa' | 'xgi' | 'clean_sheets' | 'minutes' | 'gw' = $state('twxp8');
 	let sortAsc = $state(false);
 	let sortGw = $state(0);  // Which specific GW to sort by (when sortBy === 'gw')
 
@@ -91,7 +92,7 @@
 			purchase_price: p.purchase_price,
 			selling_price: p.selling_price,
 			projections: p.projections || [],
-			bcv: null,
+			bcv: p.bcv ?? null,
 		}))
 	);
 	let rawBank = $derived(squadData?.bank || 0);
@@ -420,6 +421,9 @@
 					const aSum = (a.projections || []).slice(0, 6).reduce((s: number, p: any) => s + p.pts, 0);
 					const bSum = (b.projections || []).slice(0, 6).reduce((s: number, p: any) => s + p.pts, 0);
 					diff = bSum - aSum;
+				}
+				else if (sortBy === 'vfm') {
+					diff = (playerVFM(b) ?? -999) - (playerVFM(a) ?? -999);
 				}
 				else if (sortBy === 'price') diff = b.now_cost - a.now_cost;
 				else if (sortBy === 'form') diff = parseFloat(b.form || '0') - parseFloat(a.form || '0');
@@ -893,10 +897,11 @@
 					<!-- LIST VIEW -->
 					<section class="list-view">
 						<div class="list-inner">
-						<div class="list-header" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+						<div class="list-header" style="grid-template-columns: 2.5fr 48px 56px 48px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
 							<span>Player</span>
 							<span class="text-center">Pos</span>
 							<span class="text-right">Price</span>
+							<span class="text-right">VFM</span>
 							{#each gwColumns as gw}
 								<span class="text-center">GW{gw}</span>
 							{/each}
@@ -907,7 +912,7 @@
 						<!-- Starting XI -->
 						<div class="list-body">
 							{#each starting11 as player}
-								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px 48px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
 									<div class="flex items-center gap-2 min-w-0">
 										<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4 flex-shrink-0" />
 										<a href="/player/{player.element_id}" class="text-xs font-medium truncate hover:text-[var(--color-accent-light)]">
@@ -918,6 +923,7 @@
 										<span class="pos-badge {positionBg(player.element_type)}">{POSITIONS[player.element_type]}</span>
 									</div>
 									<div class="text-right font-mono text-[10px]">{formatPrice(player.current_price)}</div>
+									<div class="text-right font-mono text-[10px] text-[var(--color-text-2)]">{formatVFM(playerVFM(player))}</div>
 									{#each gwColumns as gw}
 										<div class="text-center font-mono text-[10px] rounded px-0.5 py-0.5"
 											style="background: {(player.projections || []).find(p => p.gw === gw)?.pts != null ? squadGwCellColor((player.projections || []).find(p => p.gw === gw)?.pts ?? 0, gw) : 'transparent'}">
@@ -948,7 +954,7 @@
 
 						<div class="list-body list-body--bench">
 							{#each bench as player}
-								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px 48px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
 									<div class="flex items-center gap-2 min-w-0">
 										<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4 flex-shrink-0" />
 										<a href="/player/{player.element_id}" class="text-xs truncate hover:text-[var(--color-accent-light)]">
@@ -959,6 +965,7 @@
 										<span class="pos-badge {positionBg(player.element_type)}">{POSITIONS[player.element_type]}</span>
 									</div>
 									<div class="text-right font-mono text-[10px]">{formatPrice(player.current_price)}</div>
+									<div class="text-right font-mono text-[10px] text-[var(--color-text-2)]">{formatVFM(playerVFM(player))}</div>
 									{#each gwColumns as gw}
 										<div class="text-center font-mono text-[10px] rounded px-0.5 py-0.5"
 											style="background: {(player.projections || []).find(p => p.gw === gw)?.pts != null ? squadGwCellColor((player.projections || []).find(p => p.gw === gw)?.pts ?? 0, gw) : 'transparent'}">
@@ -1058,6 +1065,9 @@
 									<option value="xpts6">xPts 6wk</option>
 									<option value="ep_next">Next GW</option>
 								</optgroup>
+								<optgroup label="Value">
+									<option value="vfm">VFM</option>
+								</optgroup>
 								<optgroup label="Underlying">
 									<option value="xg">xG</option>
 									<option value="xa">xA</option>
@@ -1077,26 +1087,46 @@
 
 					<!-- Column headers + player list -->
 					<div class="panel-results">
-						<table class="text-[9px] border-collapse" style="min-width: {100 + 36 + (panelGwColumns.length * 32) + 44}px;">
+						<table class="w-full text-[9px] border-collapse">
 							<thead class="sticky top-0 bg-[var(--color-surface-2)] z-10">
 								<tr class="text-[7px] text-[var(--color-text-3)] uppercase tracking-wider border-b border-[var(--color-surface-4)]">
-									<th class="sticky left-0 bg-[var(--color-surface-2)] z-20 text-left py-1 pl-2 pr-1" style="min-width:100px;">Player</th>
-									<th class="text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}" style="min-width:36px;"
-										onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}>£</th>
+									<th class="sticky left-0 bg-[var(--color-surface-2)] z-20 text-left py-1.5 pl-2 pr-1" style="min-width:96px;">Player</th>
+									<th class="text-center py-1.5 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'price' ? 'text-[var(--color-accent-light)]' : ''}"
+										onclick={() => { if (sortBy === 'price') { sortAsc = !sortAsc; } else { sortBy = 'price'; sortAsc = false; }}}>£{sortBy === 'price' ? (sortAsc ? '↑' : '↓') : ''}</th>
+									<th class="text-center py-1.5 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'vfm' ? 'text-[var(--color-accent-light)]' : ''}"
+										onclick={() => { if (sortBy === 'vfm') { sortAsc = !sortAsc; } else { sortBy = 'vfm'; sortAsc = false; }}}
+										title="Value For Money">VFM{sortBy === 'vfm' ? (sortAsc ? '↑' : '↓') : ''}</th>
 									{#each panelGwColumns as gw}
-										<th class="text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}" style="min-width:32px;"
-											onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}>{gw}</th>
+										<th class="text-center py-1.5 cursor-pointer hover:text-[var(--color-text-0)] {sortBy === 'gw' && sortGw === gw ? 'text-[var(--color-accent-light)]' : ''}"
+											onclick={() => { sortBy = 'gw'; sortGw = gw; sortAsc = false; }}>GW{gw}</th>
 									{/each}
-									<th class="sticky right-0 bg-[var(--color-surface-2)] z-20 text-center py-1 cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]" style="min-width:44px;"
+									<th class="sticky right-0 bg-[var(--color-surface-2)] z-20 text-center py-1.5 pr-2 cursor-pointer hover:text-[var(--color-text-0)] text-[var(--color-accent-light)]"
 										onclick={() => sortAsc = !sortAsc}>
-										{#if sortBy === 'twxp8'}TWxP{:else if sortBy === 'twxp6'}TW6{:else if sortBy === 'xpts8'}Σ8{:else if sortBy === 'xpts6'}Σ6{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Frm{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TrI{:else if sortBy === 'xg'}xG{:else if sortBy === 'xa'}xA{:else if sortBy === 'xgi'}xGI{:else if sortBy === 'clean_sheets'}CS{:else if sortBy === 'minutes'}Min{:else if sortBy === 'price'}£{:else}Val{/if}
+										{#if sortBy === 'twxp8'}TWxP{:else if sortBy === 'twxp6'}TW6{:else if sortBy === 'xpts8'}Σ8{:else if sortBy === 'xpts6'}Σ6{:else if sortBy === 'ep_next'}Nxt{:else if sortBy === 'form'}Frm{:else if sortBy === 'points'}Pts{:else if sortBy === 'transfers_in'}TrI{:else if sortBy === 'xg'}xG{:else if sortBy === 'xa'}xA{:else if sortBy === 'xgi'}xGI{:else if sortBy === 'clean_sheets'}CS{:else if sortBy === 'minutes'}Min{:else if sortBy === 'price'}£{:else if sortBy === 'vfm'}VFM{:else}Val{/if}
 										{sortAsc ? '↑' : '↓'}
 									</th>
 								</tr>
 							</thead>
 							<tbody>
-							{#if searchResults.length > 0}
+							{#if !allPlayersLoaded}
+								<!-- Skeleton rows to reserve space and avoid a blank floating table -->
+								{#each Array(12) as _}
+									<tr class="border-b border-[var(--color-surface-4)]/20">
+										<td class="sticky left-0 bg-[var(--color-surface-2)] py-1.5 pl-2 pr-1">
+											<div class="flex items-center gap-1.5">
+												<div class="w-5 h-7 rounded bg-[var(--color-surface-4)]/40 flex-shrink-0"></div>
+												<div class="flex-1 space-y-1">
+													<div class="h-2 w-14 rounded bg-[var(--color-surface-4)]/40"></div>
+													<div class="h-1.5 w-8 rounded bg-[var(--color-surface-4)]/25"></div>
+												</div>
+											</div>
+										</td>
+										<td colspan="99"></td>
+									</tr>
+								{/each}
+							{:else if searchResults.length > 0}
 								{#each searchResults as player}
+									{@const vfm = playerVFM(player)}
 									<tr
 										onclick={() => transferOutPlayer ? completeTransfer(player) : null}
 										class="border-b border-[var(--color-surface-4)]/30 hover:bg-white/[0.03] transition-colors {transferOutPlayer ? 'cursor-pointer' : 'opacity-70'}"
@@ -1105,12 +1135,13 @@
 											<div class="flex items-center gap-1.5">
 												<img src="https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_{player.team_code}-66.webp" alt="" class="w-5 h-7 flex-shrink-0" />
 												<div class="min-w-0">
-													<div class="text-[10px] font-medium truncate text-[var(--color-text-0)] max-w-[70px]">{player.web_name}</div>
+													<div class="text-[10px] font-medium truncate text-[var(--color-text-0)] max-w-[68px]">{player.web_name}</div>
 													<div class="text-[8px] text-[var(--color-text-3)]">{player.team_short}</div>
 												</div>
 											</div>
 										</td>
 										<td class="text-center font-mono text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</td>
+										<td class="text-center font-mono {vfm != null ? 'text-[var(--color-text-1)]' : 'text-[var(--color-text-3)]'}">{formatVFM(vfm)}</td>
 										{#each panelGwColumns as gw}
 											{@const pts = getPlayerGwPtsPanel(player, gw)}
 											<td class="text-center font-mono rounded"
@@ -1118,11 +1149,12 @@
 												{pts !== null ? pts.toFixed(1) : '-'}
 											</td>
 										{/each}
-										<td class="sticky right-0 bg-[var(--color-surface-2)] z-10 text-center font-mono font-semibold text-[var(--color-accent-light)]">
+										<td class="sticky right-0 bg-[var(--color-surface-2)] z-10 text-center font-mono font-semibold text-[var(--color-accent-light)] pr-2">
 											{#if sortBy === 'twxp8'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
 											{:else if sortBy === 'twxp6'}{calculatePlayerTWxP((player.projections || []).slice(0, 6)).toFixed(1)}
 											{:else if sortBy === 'xpts8'}{(player.projections || []).slice(0, 8).reduce((s, p) => s + p.pts, 0).toFixed(1)}
 											{:else if sortBy === 'xpts6'}{(player.projections || []).slice(0, 6).reduce((s, p) => s + p.pts, 0).toFixed(1)}
+											{:else if sortBy === 'vfm'}{formatVFM(vfm)}
 											{:else if sortBy === 'price'}{formatPrice(player.now_cost)}
 											{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
 											{:else if sortBy === 'form'}{player.form || '-'}
@@ -1139,10 +1171,8 @@
 										</td>
 									</tr>
 								{/each}
-							{:else if allPlayersLoaded}
-								<tr><td colspan="99" class="p-4 text-center text-[var(--color-text-2)] text-[10px]">No players match</td></tr>
 							{:else}
-								<tr><td colspan="99" class="p-4 text-center text-[var(--color-text-2)] text-[10px]">Loading...</td></tr>
+								<tr><td colspan="99" class="p-4 text-center text-[var(--color-text-2)] text-[10px]">No players match</td></tr>
 							{/if}
 							</tbody>
 						</table>
@@ -1681,7 +1711,7 @@
 	}
 
 	.list-inner {
-		min-width: 580px;
+		min-width: 628px;
 	}
 
 	.list-header {
