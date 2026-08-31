@@ -86,8 +86,14 @@ function matchPlayer(csvName: string, csvTeamApi: string, players: ApiPlayer[]):
 
 function parseFloat2(s: string | undefined): number | null {
 	if (!s || s.trim() === '' || s.trim() === '-') return null;
-	const v = parseFloat(s.trim());
-	return isNaN(v) ? null : v;
+	let t = s.trim();
+	// Accounting notation: parentheses denote a negative value, e.g. "(0.15)" = -0.15
+	const negative = t.startsWith('(') && t.endsWith(')');
+	t = t.replace(/[()%,]/g, '').trim();
+	if (t === '' || t === '-') return null;
+	const v = parseFloat(t);
+	if (isNaN(v)) return null;
+	return negative ? -v : v;
 }
 
 export const POST: RequestHandler = async ({ request }) => {
