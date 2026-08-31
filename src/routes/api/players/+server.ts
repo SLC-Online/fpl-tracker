@@ -112,8 +112,12 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	const bcvMap = new Map<number, number>();
 	for (const m of metaData || []) {
-		if (!bcvMap.has(m.element_id) && m.meta?.bcv != null) {
-			bcvMap.set(m.element_id, m.meta.bcv);
+		let meta: any = m.meta;
+		if (typeof meta === 'string') {
+			try { meta = JSON.parse(meta); } catch { meta = null; }
+		}
+		if (!bcvMap.has(m.element_id) && meta?.bcv != null) {
+			bcvMap.set(m.element_id, meta.bcv);
 		}
 	}
 

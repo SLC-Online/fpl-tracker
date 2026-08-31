@@ -115,12 +115,12 @@
 
 	const columns = [
 		{ id: 'now_cost', label: 'Price' },
-		{ id: 'vfm', label: 'VFM' },
 		{ id: 'total_points', label: 'Pts' },
 		{ id: 'form', label: 'Form' },
 		{ id: 'selected_by_percent', label: 'Own%' },
 		{ id: 'price_change_percent', label: 'Pressure' },
 		{ id: 'twxp', label: 'TWxP' },
+		{ id: 'vfm', label: 'VFM' },
 	];
 </script>
 
@@ -205,7 +205,6 @@
 							</div>
 						</td>
 						<td class="text-right px-3 py-3 font-mono text-sm">{formatPrice(row.now_cost)}</td>
-						<td class="text-right px-3 py-3 font-mono text-sm text-[var(--color-text-1)]">{formatVFM(vfm)}</td>
 						<td class="text-right px-3 py-3 font-mono text-sm font-semibold">{row.total_points}</td>
 						<td class="text-right px-3 py-3 font-mono text-sm text-[var(--color-text-1)] hidden sm:table-cell">{row.form || '-'}</td>
 						<td class="text-right px-3 py-3 font-mono text-sm text-[var(--color-text-2)] hidden md:table-cell">{row.selected_by_percent}%</td>
@@ -216,6 +215,7 @@
 						<td class="text-right px-3 py-3 font-mono text-sm font-semibold text-[var(--color-accent-light)]">
 							{twxp !== null ? twxp.toFixed(1) : '-'}
 						</td>
+						<td class="text-right px-3 py-3 font-mono text-sm text-[var(--color-text-1)]">{formatVFM(vfm)}</td>
 					</tr>
 
 					<!-- Expanded detail row -->

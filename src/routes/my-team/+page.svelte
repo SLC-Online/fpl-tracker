@@ -353,21 +353,27 @@
 
 	// --- Transfer search (client-side for instant, accent-insensitive filtering) ---
 	let allPlayers: any[] = $state([]);
-	let allPlayersLoaded = $state(false);
+	let allPlayersLoaded = $state(false);   // true only once data has actually arrived
+	let allPlayersFetching = $state(false); // re-entry guard while the fetch is in flight
 
 	async function loadAllPlayers() {
-		if (allPlayersLoaded) return;
-		allPlayersLoaded = true;  // Set immediately to prevent re-entry
+		if (allPlayersFetching || allPlayersLoaded) return;
+		allPlayersFetching = true;
 		try {
 			const resp = await fetch('/api/players?q=');
 			if (resp.ok) {
 				allPlayers = await resp.json();
+				allPlayersLoaded = true;
 			}
-		} catch {}
+		} catch {
+			// leave allPlayersLoaded false so the skeleton keeps showing
+		} finally {
+			allPlayersFetching = false;
+		}
 	}
 
 	$effect(() => {
-		if (squadData && !allPlayersLoaded) {
+		if (squadData && !allPlayersLoaded && !allPlayersFetching) {
 			loadAllPlayers();
 		}
 	});
@@ -897,22 +903,22 @@
 					<!-- LIST VIEW -->
 					<section class="list-view">
 						<div class="list-inner">
-						<div class="list-header" style="grid-template-columns: 2.5fr 48px 56px 48px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+						<div class="list-header" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 48px 32px;">
 							<span>Player</span>
 							<span class="text-center">Pos</span>
 							<span class="text-right">Price</span>
-							<span class="text-right">VFM</span>
 							{#each gwColumns as gw}
 								<span class="text-center">GW{gw}</span>
 							{/each}
 							<span class="text-right">TWxP</span>
+							<span class="text-right">VFM</span>
 							<span></span>
 						</div>
 
 						<!-- Starting XI -->
 						<div class="list-body">
 							{#each starting11 as player}
-								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px 48px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 48px 32px;">
 									<div class="flex items-center gap-2 min-w-0">
 										<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4 flex-shrink-0" />
 										<a href="/player/{player.element_id}" class="text-xs font-medium truncate hover:text-[var(--color-accent-light)]">
@@ -923,7 +929,6 @@
 										<span class="pos-badge {positionBg(player.element_type)}">{POSITIONS[player.element_type]}</span>
 									</div>
 									<div class="text-right font-mono text-[10px]">{formatPrice(player.current_price)}</div>
-									<div class="text-right font-mono text-[10px] text-[var(--color-text-2)]">{formatVFM(playerVFM(player))}</div>
 									{#each gwColumns as gw}
 										<div class="text-center font-mono text-[10px] rounded px-0.5 py-0.5"
 											style="background: {(player.projections || []).find(p => p.gw === gw)?.pts != null ? squadGwCellColor((player.projections || []).find(p => p.gw === gw)?.pts ?? 0, gw) : 'transparent'}">
@@ -933,6 +938,7 @@
 									<div class="text-right font-mono text-[11px] font-semibold text-[var(--color-accent-light)]">
 										{calculatePlayerTWxP(player.projections).toFixed(1)}
 									</div>
+									<div class="text-right font-mono text-[10px] text-[var(--color-text-2)]">{formatVFM(playerVFM(player))}</div>
 									<div class="flex justify-center">
 										<button
 											onclick={() => startTransferOut(player)}
@@ -954,7 +960,7 @@
 
 						<div class="list-body list-body--bench">
 							{#each bench as player}
-								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px 48px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 32px;">
+								<div class="list-row" style="grid-template-columns: 2.5fr 48px 56px repeat({gwColumns.length}, minmax(36px,1fr)) 52px 48px 32px;">
 									<div class="flex items-center gap-2 min-w-0">
 										<img src={teamBadgeUrl(player.team_code)} alt="" class="w-4 h-4 flex-shrink-0" />
 										<a href="/player/{player.element_id}" class="text-xs truncate hover:text-[var(--color-accent-light)]">
@@ -965,7 +971,6 @@
 										<span class="pos-badge {positionBg(player.element_type)}">{POSITIONS[player.element_type]}</span>
 									</div>
 									<div class="text-right font-mono text-[10px]">{formatPrice(player.current_price)}</div>
-									<div class="text-right font-mono text-[10px] text-[var(--color-text-2)]">{formatVFM(playerVFM(player))}</div>
 									{#each gwColumns as gw}
 										<div class="text-center font-mono text-[10px] rounded px-0.5 py-0.5"
 											style="background: {(player.projections || []).find(p => p.gw === gw)?.pts != null ? squadGwCellColor((player.projections || []).find(p => p.gw === gw)?.pts ?? 0, gw) : 'transparent'}">
@@ -975,6 +980,7 @@
 									<div class="text-right font-mono text-[11px] text-[var(--color-text-2)]">
 										{calculatePlayerTWxP(player.projections).toFixed(1)}
 									</div>
+									<div class="text-right font-mono text-[10px] text-[var(--color-text-2)]">{formatVFM(playerVFM(player))}</div>
 									<div class="flex justify-center">
 										<button
 											onclick={() => startTransferOut(player)}

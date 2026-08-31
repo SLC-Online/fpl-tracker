@@ -130,8 +130,12 @@ export const GET: RequestHandler = async ({ url }) => {
 			}
 			projectionMap.get(proj.element_id)!.push({ gw: proj.gameweek, pts: proj.expected_points });
 			// bcv lives on the meta of the next-GW row; take the first non-null we see
-			if (!bcvMap.has(proj.element_id) && (proj as any).meta?.bcv != null) {
-				bcvMap.set(proj.element_id, (proj as any).meta.bcv);
+			let meta: any = (proj as any).meta;
+			if (typeof meta === 'string') {
+				try { meta = JSON.parse(meta); } catch { meta = null; }
+			}
+			if (!bcvMap.has(proj.element_id) && meta?.bcv != null) {
+				bcvMap.set(proj.element_id, meta.bcv);
 			}
 		}
 

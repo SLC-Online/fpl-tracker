@@ -34,7 +34,7 @@ export function playerVFM(player: { bcv?: number | null } | null | undefined): n
 	return computeVFM({ bcv: player.bcv });
 }
 
-/** Format a VFM value for display (1 decimal), or a dash when unavailable. */
+/** Format a VFM value for display (2 decimals), or a dash when unavailable. */
 export function formatVFM(v: number | null | undefined): string {
-	return v == null ? '—' : v.toFixed(1);
+	return v == null ? '—' : v.toFixed(2);
 }
