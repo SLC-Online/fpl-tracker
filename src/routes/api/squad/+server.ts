@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { getEntry, getEventPicks, getTransfers, calculateSellingPrice } from '$lib/server/fpl-api';
+import { getEntry, getEventPicks, getTransfers, getHistory, calculateSellingPrice } from '$lib/server/fpl-api';
 import { supabaseAdmin } from '$lib/supabase-server';
 import type { RequestHandler } from './$types';
 
@@ -36,8 +36,15 @@ export const GET: RequestHandler = async ({ url }) => {
 			}
 		}
 
-		// 4. Get all transfers this season
+		// 4. Get all transfers this season + chip history (for accurate FT calc)
 		const transfers = await getTransfers(managerId);
+		let chips: any[] = [];
+		try {
+			const history = await getHistory(managerId);
+			chips = history.chips || [];
+		} catch {
+			chips = [];
+		}
 
 		// 5. Get player data from our DB for the squad
 		const elementIds = picks.picks.map(p => p.element);
@@ -163,24 +170,34 @@ export const GET: RequestHandler = async ({ url }) => {
 			};
 		});
 
-		// Compute available free transfers for the upcoming GW.
-		// Rules (2024-25+): start with 1, +1 banked per GW, capped at 5, −1 per transfer made.
-		// A GW where a chip (wildcard/free hit) was active doesn't consume FTs.
+		// Compute available free transfers going INTO the next (planned) gameweek.
+		// Rules (2024-25+): you start GW1 with 1 FT. At the start of each subsequent
+		// gameweek you bank +1 (capped at 5), then transfers made during that gameweek
+		// are subtracted. On a wildcard or free-hit gameweek, transfers are free and do
+		// not consume banked FTs, so we skip the subtraction for those.
+		// We simulate GW1..(nextGw-1) fully, then bank the +1 for nextGw itself.
 		let freeTransfers = 1;
 		try {
-			// Count transfers made per gameweek
 			const transfersByGw = new Map<number, number>();
 			for (const t of transfers) {
 				transfersByGw.set(t.event, (transfersByGw.get(t.event) || 0) + 1);
 			}
-			// Walk from GW1 up to current GW, simulating FT accumulation
-			let ft = 1;
-			for (let gw = 2; gw <= currentGw; gw++) {
-				ft = Math.min(5, ft + 1);          // gain 1 FT at each new GW, cap 5
-				const made = transfersByGw.get(gw) || 0;
-				ft = Math.max(0, ft - made);        // spend on transfers made that GW
+			const chipByGw = new Map<number, string>();
+			for (const c of chips) {
+				if (c.name === 'wildcard' || c.name === 'freehit') {
+					chipByGw.set(c.event, c.name);
+				}
 			}
-			// For the upcoming (not-yet-played) GW we also gain +1
+
+			let ft = 1;  // GW1 starting allowance
+			// Process each completed gameweek from GW2 up to the one before nextGw
+			for (let gw = 2; gw < nextGw; gw++) {
+				ft = Math.min(5, ft + 1);               // bank +1 at start of the GW
+				if (chipByGw.has(gw)) continue;         // WC/FH: transfers free, bank untouched
+				const made = transfersByGw.get(gw) || 0;
+				ft = Math.max(0, ft - made);
+			}
+			// Bank the +1 for the upcoming (nextGw) — transfers not yet made
 			ft = Math.min(5, ft + 1);
 			freeTransfers = ft;
 		} catch {
