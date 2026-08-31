@@ -71,7 +71,7 @@
 			declaredTransfers = [];
 			savedOptions = [];
 			currentTransfers = [];
-			freeTransfers = 1;
+			freeTransfers = squadData.free_transfers ?? 1;
 		} catch (e: any) {
 			errorMsg = e.message;
 		} finally {
@@ -141,7 +141,16 @@
 
 	let workingTWxP = $derived(calculateSquadTWxP(workingSquad));
 
-	let transferCost = $derived(transferPointsCost(currentTransfers.length, freeTransfers));
+	// Free transfers remaining after any DECLARED (committed) transfers.
+	// Declared transfers use up free transfers first; trial transfers in the
+	// planner are then costed against whatever's left.
+	let effectiveFreeTransfers = $derived(
+		freeTransfers >= 15
+			? 15  // Wildcard / Free Hit: unlimited free transfers
+			: Math.max(0, freeTransfers - declaredTransfers.length)
+	);
+
+	let transferCost = $derived(transferPointsCost(currentTransfers.length, effectiveFreeTransfers));
 
 	// --- Squad display (starting XI / bench) ---
 	let starting11 = $derived(workingSquad.filter((_, i) => i < 11));
@@ -522,7 +531,7 @@
 		if (currentTransfers.length === 0) return;
 		const { squad, bank } = applyTransfers(baseSquad, baseBank, currentTransfers);
 		const twxp = calculateSquadTWxP(squad);
-		const cost = transferPointsCost(currentTransfers.length, freeTransfers);
+		const cost = transferPointsCost(currentTransfers.length, effectiveFreeTransfers);
 		const newOption: TransferOption = {
 			id: crypto.randomUUID(),
 			name: `Option ${String.fromCharCode(65 + savedOptions.length)}`,
@@ -552,7 +561,7 @@
 				cost: o.cost,
 				netGain: o.netGain,
 				transfers: o.transfers,
-				verdict: isTransferWorthIt(o, freeTransfers),
+				verdict: isTransferWorthIt(o, effectiveFreeTransfers),
 			}))
 		];
 		const maxTwxp = Math.max(...all.map(a => a.twxp));
@@ -656,12 +665,15 @@
 							bind:value={freeTransfers}
 							class="stat-select"
 						>
+							<option value={0}>0 FT</option>
 							<option value={1}>1 FT</option>
 							<option value={2}>2 FT</option>
 							<option value={3}>3 FT</option>
-							<option value={15}>WC</option>
+							<option value={4}>4 FT</option>
+							<option value={5}>5 FT</option>
+							<option value={15}>WC/FH</option>
 						</select>
-						<span class="stat-label">Transfers</span>
+						<span class="stat-label">{declaredTransfers.length > 0 ? `${effectiveFreeTransfers} left` : 'Transfers'}</span>
 					</div>
 					<div class="stat-cell">
 						<span class="stat-value font-mono">{formatPrice(workingBank)}</span>

@@ -163,6 +163,30 @@ export const GET: RequestHandler = async ({ url }) => {
 			};
 		});
 
+		// Compute available free transfers for the upcoming GW.
+		// Rules (2024-25+): start with 1, +1 banked per GW, capped at 5, −1 per transfer made.
+		// A GW where a chip (wildcard/free hit) was active doesn't consume FTs.
+		let freeTransfers = 1;
+		try {
+			// Count transfers made per gameweek
+			const transfersByGw = new Map<number, number>();
+			for (const t of transfers) {
+				transfersByGw.set(t.event, (transfersByGw.get(t.event) || 0) + 1);
+			}
+			// Walk from GW1 up to current GW, simulating FT accumulation
+			let ft = 1;
+			for (let gw = 2; gw <= currentGw; gw++) {
+				ft = Math.min(5, ft + 1);          // gain 1 FT at each new GW, cap 5
+				const made = transfersByGw.get(gw) || 0;
+				ft = Math.max(0, ft - made);        // spend on transfers made that GW
+			}
+			// For the upcoming (not-yet-played) GW we also gain +1
+			ft = Math.min(5, ft + 1);
+			freeTransfers = ft;
+		} catch {
+			freeTransfers = 1;
+		}
+
 		return json({
 			manager: {
 				id: entry.id,
@@ -177,6 +201,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			total_points: picks.entry_history.total_points,
 			gameweek: picks.entry_history.event,
 			transfers_made: transfers.length,
+			free_transfers: freeTransfers,
 			active_chip: picks.active_chip,
 		});
 	} catch (e: any) {
