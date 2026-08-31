@@ -95,7 +95,13 @@
 </svelte:head>
 
 <div class="max-w-2xl space-y-8">
-	<h1 class="text-2xl font-bold">Admin</h1>
+	<div class="flex items-center justify-between">
+		<h1 class="text-2xl font-bold">Admin</h1>
+		<a href="/admin/data"
+			class="text-sm px-3 py-1.5 rounded-lg bg-[var(--color-surface-3)] text-[var(--color-text-1)] hover:text-[var(--color-text-0)] hover:bg-[var(--color-surface-4)] transition-colors">
+			View captured data →
+		</a>
+	</div>
 
 	<!-- CSV Upload -->
 	<section class="bg-[var(--color-bg-card)] rounded-xl p-6 border border-[var(--color-border)]">
