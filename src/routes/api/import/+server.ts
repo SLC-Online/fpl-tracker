@@ -251,9 +251,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	}
 
-	// Also populate projection_inputs from the imported data
+	// Also populate projection_inputs from the imported data — via the CAPTURE
+	// system (migration 004). final_projections reads the LATEST capture per
+	// (source, uploaded_for_gw), so we must create a fresh capture and tag rows
+	// with its capture_id, otherwise the app keeps serving old data.
 	if (imports.length > 0) {
-		// Get the Transfer Algorithm source ID
 		const { data: sources } = await supabaseAdmin
 			.from('projection_sources')
 			.select('id')
@@ -263,14 +265,18 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (sources) {
 			const projRows: any[] = [];
+			const seen = new Set<string>();
 			for (const imp of imports) {
 				const gws = [imp.gw1, imp.gw2, imp.gw3, imp.gw4, imp.gw5, imp.gw6, imp.gw7, imp.gw8];
 				for (let i = 0; i < gws.length; i++) {
 					if (gws[i] == null) continue;
 					const actualGw = gameweek + i;
 					if (actualGw > 38) continue;
+					// guard against the same (element, gw) appearing twice (dupe name-match)
+					const key = `${imp.element_id}:${actualGw}`;
+					if (seen.has(key)) continue;
+					seen.add(key);
 					projRows.push({
-						source_id: sources.id,
 						element_id: imp.element_id,
 						season,
 						gameweek: actualGw,
@@ -280,12 +286,31 @@ export const POST: RequestHandler = async ({ request }) => {
 					});
 				}
 			}
-			// Batch upsert projections
-			for (let i = 0; i < projRows.length; i += 200) {
-				await supabaseAdmin.from('projection_inputs').upsert(
-					projRows.slice(i, i + 200),
-					{ onConflict: 'source_id,element_id,season,gameweek,uploaded_for_gw' }
-				);
+
+			if (projRows.length > 0) {
+				const playerCount = new Set(projRows.map(r => r.element_id)).size;
+				// Create a new capture for this import
+				const { data: cap, error: capErr } = await supabaseAdmin
+					.from('projection_captures')
+					.insert({
+						source_id: sources.id,
+						season,
+						uploaded_for_gw: gameweek,
+						content_hash: `admin-${Date.now()}`,
+						row_count: projRows.length,
+						player_count: playerCount,
+						meta: JSON.stringify({ source: 'admin_upload' }),
+					})
+					.select('id')
+					.single();
+
+				if (!capErr && cap) {
+					const captureId = cap.id;
+					const withCapture = projRows.map(r => ({ ...r, source_id: sources.id, capture_id: captureId }));
+					for (let i = 0; i < withCapture.length; i += 200) {
+						await supabaseAdmin.from('projection_inputs').insert(withCapture.slice(i, i + 200));
+					}
+				}
 			}
 		}
 	}
