@@ -181,11 +181,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 
 		// Compute available free transfers going INTO the next (planned) gameweek.
-		// Rules (2024-25+): you start GW1 with 1 FT. At the start of each subsequent
-		// gameweek you bank +1 (capped at 5), then transfers made during that gameweek
-		// are subtracted. On a wildcard or free-hit gameweek, transfers are free and do
-		// not consume banked FTs, so we skip the subtraction for those.
-		// We simulate GW1..(nextGw-1) fully, then bank the +1 for nextGw itself.
+		// There is no transfer at GW1 (you just pick your initial squad), so free
+		// transfers only start to exist from GW2. You get 1 free transfer at GW2,
+		// then each subsequent gameweek you bank +1 (capped at 5), minus transfers
+		// made that GW. Wildcard/Free-Hit gameweeks don't consume banked FTs.
 		let freeTransfers = 1;
 		try {
 			const transfersByGw = new Map<number, number>();
@@ -199,17 +198,21 @@ export const GET: RequestHandler = async ({ url }) => {
 				}
 			}
 
-			let ft = 1;  // GW1 starting allowance
-			// Process each completed gameweek from GW2 up to the one before nextGw
-			for (let gw = 2; gw < nextGw; gw++) {
-				ft = Math.min(5, ft + 1);               // bank +1 at start of the GW
-				if (chipByGw.has(gw)) continue;         // WC/FH: transfers free, bank untouched
-				const made = transfersByGw.get(gw) || 0;
-				ft = Math.max(0, ft - made);
+			if (nextGw <= 2) {
+				freeTransfers = 1;  // GW2 is the first week a free transfer exists
+			} else {
+				let ft = 1;  // the GW2 allowance
+				// process completed gameweeks from GW2 up to the one before nextGw
+				for (let gw = 2; gw < nextGw; gw++) {
+					if (gw > 2) ft = Math.min(5, ft + 1);   // bank +1 at the start of each GW after GW2
+					if (chipByGw.has(gw)) continue;          // WC/FH: transfers free, bank untouched
+					const made = transfersByGw.get(gw) || 0;
+					ft = Math.max(0, ft - made);
+				}
+				// bank the +1 for the upcoming (nextGw)
+				ft = Math.min(5, ft + 1);
+				freeTransfers = ft;
 			}
-			// Bank the +1 for the upcoming (nextGw) — transfers not yet made
-			ft = Math.min(5, ft + 1);
-			freeTransfers = ft;
 		} catch {
 			freeTransfers = 1;
 		}
