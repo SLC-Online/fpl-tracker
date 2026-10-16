@@ -2,6 +2,7 @@
 	import { teamBadgeUrl, POSITIONS } from '$lib/types';
 	import { gwCellColor } from '$lib/gw-colors';
 	import { playerVFM, formatVFM } from '$lib/vfm';
+	import { formatPts } from '$lib/format';
 	import {
 		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers,
 		transferPointsCost, isTransferWorthIt,
@@ -192,7 +193,7 @@
 
 	function getPlayerGwPts(player: SquadPlayer, gw: number): string {
 		const proj = (player.projections || []).find(p => p.gw === gw);
-		return proj ? proj.pts.toFixed(1) : '--';
+		return proj ? formatPts(proj.pts) : '--';
 	}
 
 	// --- Declare actual transfers ---
@@ -700,7 +701,7 @@
 						<span class="stat-label">Cost</span>
 					</div>
 					<div class="stat-cell">
-						<span class="stat-value font-mono text-[var(--color-accent-light)]">{workingTWxP.toFixed(1)}</span>
+						<span class="stat-value font-mono text-[var(--color-accent-light)]">{formatPts(workingTWxP)}</span>
 						<span class="stat-label">TWxP</span>
 					</div>
 				</div>
@@ -856,7 +857,7 @@
 							<span class="text-[var(--color-rise)] text-xs font-semibold">{t.in.web_name}</span>
 							<span class="font-mono text-[10px] text-[var(--color-text-3)]">{formatPrice(t.in.current_price)}</span>
 							<span class="font-mono text-[10px] ml-auto {calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections) > 0 ? 'text-[var(--color-rise)]' : 'text-[var(--color-fall)]'}">
-								{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)) > 0 ? '+' : ''}{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)).toFixed(1)}
+								{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)) > 0 ? '+' : ''}{formatPts(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections))}
 							</span>
 							<button onclick={() => removeCurrentTransfer(i)} class="ml-2 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">
 								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -936,7 +937,7 @@
 										</div>
 									{/each}
 									<div class="text-right font-mono text-[11px] font-semibold text-[var(--color-accent-light)]">
-										{calculatePlayerTWxP(player.projections).toFixed(1)}
+										{formatPts(calculatePlayerTWxP(player.projections))}
 									</div>
 									<div class="text-right font-mono text-[10px] text-[var(--color-text-2)]">{formatVFM(playerVFM(player))}</div>
 									<div class="flex justify-center">
@@ -978,7 +979,7 @@
 										</div>
 									{/each}
 									<div class="text-right font-mono text-[11px] text-[var(--color-text-2)]">
-										{calculatePlayerTWxP(player.projections).toFixed(1)}
+										{formatPts(calculatePlayerTWxP(player.projections))}
 									</div>
 									<div class="text-right font-mono text-[10px] text-[var(--color-text-2)]">{formatVFM(playerVFM(player))}</div>
 									<div class="flex justify-center">
@@ -1151,15 +1152,15 @@
 											{@const pts = getPlayerGwPtsPanel(player, gw)}
 											<td class="text-center font-mono rounded"
 												style="background: {pts !== null ? panelGwCellColor(pts, gw) : 'transparent'}">
-												{pts !== null ? pts.toFixed(1) : '-'}
+												{pts !== null ? formatPts(pts) : '-'}
 											</td>
 										{/each}
 										<td class="text-center font-mono {vfm != null ? 'text-[var(--color-text-1)]' : 'text-[var(--color-text-3)]'}">{formatVFM(vfm)}</td>
 										<td class="sticky right-0 bg-[var(--color-surface-2)] z-10 text-center font-mono font-semibold text-[var(--color-accent-light)] pr-2">
-											{#if sortBy === 'twxp8'}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
-											{:else if sortBy === 'twxp6'}{calculatePlayerTWxP((player.projections || []).slice(0, 6)).toFixed(1)}
-											{:else if sortBy === 'xpts8'}{(player.projections || []).slice(0, 8).reduce((s, p) => s + p.pts, 0).toFixed(1)}
-											{:else if sortBy === 'xpts6'}{(player.projections || []).slice(0, 6).reduce((s, p) => s + p.pts, 0).toFixed(1)}
+											{#if sortBy === 'twxp8'}{formatPts(calculatePlayerTWxP(player.projections || []))}
+											{:else if sortBy === 'twxp6'}{formatPts(calculatePlayerTWxP((player.projections || []).slice(0, 6)))}
+											{:else if sortBy === 'xpts8'}{formatPts((player.projections || []).slice(0, 8).reduce((s, p) => s + p.pts, 0))}
+											{:else if sortBy === 'xpts6'}{formatPts((player.projections || []).slice(0, 6).reduce((s, p) => s + p.pts, 0))}
 											{:else if sortBy === 'vfm'}{formatVFM(vfm)}
 											{:else if sortBy === 'price'}{formatPrice(player.now_cost)}
 											{:else if sortBy === 'ep_next'}{player.ep_next || '-'}
@@ -1171,8 +1172,8 @@
 											{:else if sortBy === 'xgi'}{player.expected_goal_involvements || '-'}
 											{:else if sortBy === 'clean_sheets'}{player.clean_sheets || 0}
 											{:else if sortBy === 'minutes'}{player.minutes || 0}
-											{:else if sortBy === 'gw'}{getPlayerGwPtsPanel(player, sortGw)?.toFixed(1) || '-'}
-											{:else}{calculatePlayerTWxP(player.projections || []).toFixed(1)}
+											{:else if sortBy === 'gw'}{(() => { const v = getPlayerGwPtsPanel(player, sortGw); return v != null ? formatPts(v) : '-'; })()}
+											{:else}{formatPts(calculatePlayerTWxP(player.projections || []))}
 											{/if}
 										</td>
 									</tr>
@@ -1223,7 +1224,7 @@
 
 							<div class="comparison-stats">
 								<div>
-									<div class="font-mono text-sm font-semibold">{item.twxp.toFixed(1)}</div>
+									<div class="font-mono text-sm font-semibold">{formatPts(item.twxp)}</div>
 									<div class="text-[8px] text-[var(--color-text-3)] uppercase">TWxP</div>
 								</div>
 								<div>
@@ -1232,7 +1233,7 @@
 								</div>
 								<div>
 									<div class="font-mono text-sm font-semibold {item.netGain > 0 ? 'text-[var(--color-rise)]' : item.netGain < 0 ? 'text-[var(--color-fall)]' : ''}">
-										{item.netGain > 0 ? '+' : ''}{item.netGain.toFixed(1)}
+										{item.netGain > 0 ? '+' : ''}{formatPts(item.netGain)}
 									</div>
 									<div class="text-[8px] text-[var(--color-text-3)] uppercase">Net</div>
 								</div>

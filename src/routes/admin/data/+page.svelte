@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { POSITIONS } from '$lib/types';
+	import { formatPts } from '$lib/format';
 
 	let { data } = $props();
 
@@ -97,7 +98,7 @@
 								<td class="text-center px-2 py-1.5 text-[var(--color-text-3)] text-xs">{POSITIONS[p.element_type] || '—'}</td>
 								{#each dd.gwCols as gw}
 									<td class="text-center px-2 py-1.5 font-mono text-xs">
-										{p.gws[gw] != null ? p.gws[gw].toFixed(1) : '—'}
+										{p.gws[gw] != null ? formatPts(p.gws[gw]) : '—'}
 									</td>
 								{/each}
 							</tr>

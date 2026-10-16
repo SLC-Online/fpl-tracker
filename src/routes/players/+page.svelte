@@ -3,6 +3,7 @@
 	import { calculatePlayerTWxP, DECAY } from '$lib/transfer-engine';
 	import { gwCellColorFromRatio } from '$lib/gw-colors';
 	import { computeVFM, formatVFM } from '$lib/vfm';
+	import { formatPts } from '$lib/format';
 	import PlayerPhoto from '$lib/components/PlayerPhoto.svelte';
 
 	let { data } = $props();
@@ -213,7 +214,7 @@
 							{row.price_change_percent ? parseFloat(row.price_change_percent).toFixed(1) + '%' : '-'}
 						</td>
 						<td class="text-right px-3 py-3 font-mono text-sm font-semibold text-[var(--color-accent-light)]">
-							{twxp !== null ? twxp.toFixed(1) : '-'}
+							{twxp !== null ? formatPts(twxp) : '-'}
 						</td>
 						<td class="text-right px-3 py-3 font-mono text-sm text-[var(--color-text-1)]">{formatVFM(vfm)}</td>
 					</tr>
@@ -234,7 +235,7 @@
 											<div class="text-center p-2 rounded-lg"
 												style="background: {gwCellColorFromRatio(Math.max(0, Math.min(1, ratio)))}">
 												<div class="text-[var(--color-text-2)] text-[10px] mb-0.5">GW{gw.gw}</div>
-												<div class="font-mono font-semibold text-sm">{gw.pts.toFixed(1)}</div>
+												<div class="font-mono font-semibold text-sm">{formatPts(gw.pts)}</div>
 											</div>
 										{/each}
 										{#if remainingGws.length === 0}
