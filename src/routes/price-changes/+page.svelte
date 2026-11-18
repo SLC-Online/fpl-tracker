@@ -17,7 +17,7 @@
 </script>
 
 <svelte:head>
-	<title>Price Changes — FPL Tracker</title>
+	<title>Price Changes — FPL Sorted</title>
 </svelte:head>
 
 <div class="space-y-4 sm:space-y-6">

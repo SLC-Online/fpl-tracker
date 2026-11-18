@@ -624,7 +624,7 @@
 </script>
 
 <svelte:head>
-	<title>My Team — FPL Tracker</title>
+	<title>My Team — FPL Sorted</title>
 </svelte:head>
 
 {#if !squadData}

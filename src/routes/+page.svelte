@@ -24,7 +24,7 @@
 </script>
 
 <svelte:head>
-	<title>FPL Tracker</title>
+	<title>FPL Sorted</title>
 </svelte:head>
 
 <div class="space-y-6">

@@ -126,7 +126,7 @@
 </script>
 
 <svelte:head>
-	<title>Players — FPL Tracker</title>
+	<title>Players — FPL Sorted</title>
 </svelte:head>
 
 <div class="space-y-6">

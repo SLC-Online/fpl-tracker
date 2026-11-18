@@ -93,7 +93,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin — FPL Tracker</title>
+	<title>Admin — FPL Sorted</title>
 </svelte:head>
 
 <div class="max-w-2xl space-y-8">
