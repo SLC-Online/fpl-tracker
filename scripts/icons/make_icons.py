@@ -12,6 +12,10 @@ Apple's own rendering. Everything else is cut from that render:
   square crop   -> apple-touch-icon (iOS rounds it), icon-maskable-512 (Android)
 
 Needs: macOS with Xcode installed, Google Chrome (for the lettering), Pillow.
+
+After regenerating, bump the ?v=N on the icon links in src/app.html and in
+static/site.webmanifest — browsers (Firefox especially) cache favicons by URL
+and otherwise keep showing the old one.
 """
 import json, os, shutil, stat, subprocess, sys, tempfile
 from PIL import Image
