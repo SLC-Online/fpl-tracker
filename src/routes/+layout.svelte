@@ -20,11 +20,9 @@
 		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 			<div class="flex h-14 sm:h-16 items-center justify-between">
 				<!-- Logo -->
-				<a href="/" class="flex items-center gap-2">
-					<div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center">
-						<span class="text-white font-bold text-xs sm:text-sm">FPL</span>
-					</div>
-					<span class="font-display font-bold text-base sm:text-lg tracking-tight">Tracker</span>
+				<a href="/" class="logo" aria-label="FPL Sorted — home">
+					<img class="logo-img" src="/logo@2x.png" srcset="/logo@2x.png 2x, /logo@3x.png 3x"
+						alt="" width="46" height="46" />
 				</a>
 
 				<!-- Desktop nav links -->
@@ -79,3 +77,20 @@
 		{@render children()}
 	</main>
 </div>
+
+<style>
+	/* Header logo: the glass tile from scripts/icons/make_icons.py. --s is its size. */
+	.logo {
+		display: flex;
+		align-items: center;
+		--s: 40px;
+	}
+	@media (min-width: 640px) {
+		.logo { --s: 46px; }
+	}
+	.logo-img {
+		display: block;
+		width: var(--s);
+		height: var(--s);
+	}
+</style>
