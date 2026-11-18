@@ -47,6 +47,25 @@ export interface FplEntry {
 	last_deadline_bank: number;
 	last_deadline_value: number;
 	last_deadline_total_transfers: number;
+	leagues?: {
+		classic: FplEntryLeague[];
+	};
+}
+
+export interface FplEntryLeague {
+	id: number;
+	name: string;
+	league_type: 'x' | 's';   // x = private (mini-league), s = system/public
+	rank_count: number | null;
+}
+
+export interface FplStandingsPage {
+	league: { id: number; name: string };
+	standings: {
+		has_next: boolean;
+		page: number;
+		results: { entry: number; entry_name: string; player_name: string; rank: number }[];
+	};
 }
 
 export interface FplPicksResponse {
@@ -92,6 +111,13 @@ export async function getTransfers(managerId: number): Promise<FplTransfer[]> {
  */
 export async function getHistory(managerId: number): Promise<{current: FplEntryHistory[], chips: any[], past: any[]}> {
 	return fplFetch(`entry/${managerId}/history/`);
+}
+
+/**
+ * One page (50 teams) of a classic league's standings.
+ */
+export async function getLeagueStandingsPage(leagueId: number, page: number): Promise<FplStandingsPage> {
+	return fplFetch<FplStandingsPage>(`leagues-classic/${leagueId}/standings/?page_standings=${page}`);
 }
 
 /**

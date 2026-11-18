@@ -3,6 +3,8 @@
 	import { gwCellColor } from '$lib/gw-colors';
 	import { playerVFM, formatVFM } from '$lib/vfm';
 	import { formatPts } from '$lib/format';
+	import TeamPicker from '$lib/components/TeamPicker.svelte';
+	import { isSaved, toggleSaved, pushRecent } from '$lib/saved-teams';
 	import {
 		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers,
 		transferPointsCost, isTransferWorthIt,
@@ -59,7 +61,10 @@
 	}
 
 	// --- Squad loading ---
-	async function loadSquad() {
+	let teamSaved = $state(false);
+
+	async function loadSquad(id?: number) {
+		if (id != null) managerId = String(id);
 		if (!managerId.trim()) return;
 		loading = true;
 		errorMsg = '';
@@ -74,11 +79,21 @@
 			savedOptions = [];
 			currentTransfers = [];
 			freeTransfers = squadData.free_transfers ?? 1;
+			const m = squadData.manager;
+			pushRecent({ id: m.id, team: m.team_name, manager: m.name });
+			teamSaved = isSaved(m.id);
 		} catch (e: any) {
 			errorMsg = e.message;
 		} finally {
 			loading = false;
 		}
+	}
+
+	function toggleTeamSaved() {
+		const m = squadData?.manager;
+		if (!m) return;
+		toggleSaved({ id: m.id, team: m.team_name, manager: m.name });
+		teamSaved = isSaved(m.id);
 	}
 
 	// --- Base squad from raw API (before declared transfers) ---
@@ -627,29 +642,10 @@
 			</div>
 			<h1 class="font-display font-bold text-3xl mb-1 text-[var(--color-text-0)]">Transfer Planner</h1>
 			<p class="text-[var(--color-text-2)] text-sm mb-8 leading-relaxed max-w-sm text-center">
-				Enter your FPL Manager ID to load your squad.<br />
-				Find it in the URL after <code class="font-mono text-[10px] bg-[var(--color-surface-3)] px-1.5 py-0.5 rounded text-[var(--color-accent-light)]">/entry/</code>
+				Search by team or manager name, or enter your ID.<br />
+				Your ID is in the URL after <code class="font-mono text-[10px] bg-[var(--color-surface-3)] px-1.5 py-0.5 rounded text-[var(--color-accent-light)]">/entry/</code>
 			</p>
-			<div class="loader-input-group">
-				<input
-					type="text"
-					placeholder="e.g. 1234567"
-					bind:value={managerId}
-					onkeydown={(e) => { if (e.key === 'Enter') loadSquad(); }}
-					class="loader-input"
-				/>
-				<button
-					onclick={loadSquad}
-					disabled={loading || !managerId.trim()}
-					class="loader-btn"
-				>
-					{#if loading}
-						<svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="32" stroke-dashoffset="12" /></svg>
-					{:else}
-						Load Squad
-					{/if}
-				</button>
-			</div>
+			<TeamPicker {loading} onload={(id) => loadSquad(id)} />
 			{#if errorMsg}
 				<p class="text-[var(--color-fall)] text-sm mt-4 text-center">{errorMsg}</p>
 			{/if}
@@ -664,7 +660,17 @@
 			<div class="top-bar-inner">
 				<!-- Left: Team info -->
 				<div class="top-bar-team">
-					<h1 class="font-display font-bold text-xl truncate">{squadData.manager.team_name}</h1>
+					<div class="flex items-center gap-1.5 min-w-0">
+						<h1 class="font-display font-bold text-xl truncate">{squadData.manager.team_name}</h1>
+						<button class="save-star" class:on={teamSaved} onclick={toggleTeamSaved}
+							title={teamSaved ? 'Saved — click to remove' : 'Save this team'}
+							aria-label={teamSaved ? 'Remove from saved teams' : 'Save this team'}>
+							<svg width="17" height="17" viewBox="0 0 24 24" fill={teamSaved ? 'currentColor' : 'none'} stroke="currentColor"
+								stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+								<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" />
+							</svg>
+						</button>
+					</div>
 					<p class="top-bar-meta">
 						{squadData.manager.name} · GW{squadData.gameweek} · Rank {formatRank(squadData.manager.overall_rank)}
 					</p>
@@ -1320,55 +1326,6 @@
 		opacity: 0.6;
 	}
 
-	.loader-input-group {
-		display: flex;
-		gap: 10px;
-		width: 100%;
-	}
-
-	.loader-input {
-		flex: 1;
-		padding: 14px 18px;
-		border-radius: 12px;
-		background: var(--color-surface-0);
-		border: 1px solid var(--color-surface-4);
-		color: var(--color-text-0);
-		font-family: var(--font-mono);
-		font-size: 14px;
-	}
-
-	.loader-input::placeholder {
-		color: var(--color-text-3);
-	}
-
-	.loader-input:focus {
-		outline: none;
-		border-color: var(--color-accent);
-		box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-	}
-
-	.loader-btn {
-		padding: 14px 24px;
-		border-radius: 12px;
-		background: var(--color-accent);
-		color: white;
-		font-weight: 600;
-		font-size: 14px;
-		border: none;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.loader-btn:hover {
-		background: var(--color-accent-light);
-	}
-
-	.loader-btn:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
 
 	/* ═══════════════════════════════════════════════════════════
 	   TOP BAR
@@ -1396,6 +1353,24 @@
 
 	.top-bar-team {
 		min-width: 0;
+	}
+
+	.save-star {
+		flex: none;
+		display: flex;
+		padding: 4px;
+		border-radius: 8px;
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--color-text-3);
+	}
+	.save-star:hover {
+		color: var(--color-text-1);
+		background: var(--color-surface-3);
+	}
+	.save-star.on {
+		color: var(--color-warning);
 	}
 
 	.top-bar-meta {
