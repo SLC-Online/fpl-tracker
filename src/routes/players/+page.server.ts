@@ -1,4 +1,5 @@
 import { supabase } from '$lib/supabase';
+import { getLivePrices } from '$lib/server/fpl-api';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -100,6 +101,15 @@ export const load: PageServerLoad = async () => {
 	if (nextEvent && csvData && csvData.length > 0) {
 		const csvGameweek = csvData[0]?.gameweek || 1;
 		csvGwOffset = Math.max(0, nextGw - csvGameweek);
+	}
+
+	// Live prices (snapshots can be hours old after FPL's overnight price changes).
+	const live = await getLivePrices();
+	if (live && players) {
+		for (const p of players as any[]) {
+			const lp = live.get(p.element_id);
+			if (lp) p.now_cost = lp.now_cost;
+		}
 	}
 
 	return {

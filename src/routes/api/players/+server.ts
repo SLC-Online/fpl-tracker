@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { supabaseAdmin } from '$lib/supabase-server';
+import { getLivePrices } from '$lib/server/fpl-api';
 import type { RequestHandler } from './$types';
 
 /**
@@ -35,10 +36,6 @@ export const GET: RequestHandler = async ({ url }) => {
 				teams!inner(short_name, code, name))
 		`)
 		.eq('snapshot_id', latestSnap.snapshot_id);
-
-	if (maxPrice > 0) {
-		query = query.lte('now_cost', maxPrice);
-	}
 
 	if (search) {
 		// Search across web_name, first_name, second_name
@@ -121,6 +118,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 	}
 
+	// Prices: FPL's live figures, since snapshots can be hours old after price changes.
+	const live = await getLivePrices();
+
 	const result = players
 		.filter((p: any) => !excludeIds.includes(p.element_id))
 		.map((p: any) => {
@@ -137,7 +137,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				team_short: team.short_name,
 				team_code: team.code,
 				team_name: team.name,
-				now_cost: p.now_cost,
+				now_cost: live?.get(p.element_id)?.now_cost ?? p.now_cost,
 				form: p.form,
 				total_points: p.total_points,
 				points_per_game: p.points_per_game,
@@ -158,7 +158,8 @@ export const GET: RequestHandler = async ({ url }) => {
 				projections: projMap.get(p.element_id) || [],
 				bcv: bcvMap.get(p.element_id) ?? null,
 			};
-		});
+		})
+		.filter((p: any) => !(maxPrice > 0) || p.now_cost <= maxPrice);
 
 	return json(result);
 };

@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { getEntry, getEventPicks, getTransfers, getHistory, calculateSellingPrice } from '$lib/server/fpl-api';
+import { getEntry, getEventPicks, getTransfers, getHistory, calculateSellingPrice, getLivePrices } from '$lib/server/fpl-api';
 import { supabaseAdmin } from '$lib/supabase-server';
 import type { RequestHandler } from './$types';
 
@@ -70,6 +70,12 @@ export const GET: RequestHandler = async ({ url }) => {
 		const priceMap = new Map<number, { now_cost: number; cost_change_start: number }>();
 		for (const p of currentPrices || []) {
 			priceMap.set(p.element_id, p);
+		}
+		// Prefer FPL's live prices: snapshots can be hours old after price changes.
+		const live = await getLivePrices();
+		for (const id of elementIds) {
+			const lp = live?.get(id);
+			if (lp) priceMap.set(id, { now_cost: lp.now_cost, cost_change_start: lp.cost_change_start });
 		}
 
 		// 7. Reconstruct purchase prices

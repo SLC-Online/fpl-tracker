@@ -401,6 +401,10 @@
 	// Budget filter toggle
 	let budgetFilterOn = $state(false);
 
+	// Money available for the transfer being made: bank after the other planned
+	// transfers plus this player's selling price.
+	let transferBudget = $derived.by(() => (transferOutPlayer ? workingBank + transferOutPlayer.selling_price : null));
+
 	let searchResults = $derived.by(() => {
 		if (!allPlayersLoaded) return [];
 		const squadIds = new Set(workingSquad.map(p => p.element_id));
@@ -408,9 +412,7 @@
 
 		// Budget: use manual max price if set, otherwise use affordability toggle
 		const manualMax = maxPriceFilter ? parseFloat(maxPriceFilter) * 10 : 0;  // Convert £M to tenths
-		const affordableMax = (budgetFilterOn && transferOutPlayer)
-			? workingBank + transferOutPlayer.selling_price
-			: Infinity;
+		const affordableMax = (budgetFilterOn && transferBudget !== null) ? transferBudget : Infinity;
 		const maxBudget = manualMax > 0 ? Math.min(manualMax, affordableMax) : affordableMax;
 
 		return allPlayers
@@ -580,14 +582,18 @@
 	// --- Comparison ---
 	let comparisonData = $derived.by(() => {
 		const all = [
-			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as any[], verdict: null as any },
+			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as any[], verdict: null as any, overBy: 0 },
 			...savedOptions.map(o => ({
 				name: o.name,
 				twxp: o.twxp,
 				cost: o.cost,
 				netGain: o.netGain,
 				transfers: o.transfers,
-				verdict: isTransferWorthIt(o, effectiveFreeTransfers),
+				// An option FPL wouldn't accept can't be "worth it", whatever its points.
+				verdict: o.bank < 0
+					? { worth: false, reason: `Costs ${formatPrice(-o.bank)}m more than you have` }
+					: isTransferWorthIt(o, effectiveFreeTransfers),
+				overBy: o.bank < 0 ? -o.bank : 0,
 			}))
 		];
 		const maxTwxp = Math.max(...all.map(a => a.twxp));
@@ -692,16 +698,16 @@
 						</select>
 						<span class="stat-label">{declaredTransfers.length > 0 ? `${effectiveFreeTransfers} left` : 'Transfers'}</span>
 					</div>
-					<div class="stat-cell">
-						<span class="stat-value font-mono">{formatPrice(workingBank)}</span>
-						<span class="stat-label">Bank</span>
+					<div class="stat-cell" title={workingBank < 0 ? 'These transfers cost more than you have' : ''}>
+						<span class="stat-value font-mono" class:is-bad={workingBank < 0}>{workingBank < 0 ? `−${formatPrice(-workingBank)}` : formatPrice(workingBank)}</span>
+						<span class="stat-label" class:is-bad={workingBank < 0}>{workingBank < 0 ? 'Over budget' : 'Bank'}</span>
 					</div>
 					<div class="stat-cell">
 						<span class="stat-value font-mono">{formatPrice(squadData.squad_value)}</span>
 						<span class="stat-label">Value</span>
 					</div>
 					<div class="stat-cell">
-						<span class="stat-value font-mono {transferCost > 0 ? 'text-[var(--color-fall)]' : 'text-[var(--color-rise)]'}">
+						<span class="stat-value font-mono" class:is-bad={transferCost > 0} class:is-good={transferCost === 0}>
 							{transferCost > 0 ? `-${transferCost}` : '0'}
 						</span>
 						<span class="stat-label">Cost</span>
@@ -842,7 +848,15 @@
 		{#if currentTransfers.length > 0}
 			<section class="transfers-strip">
 				<div class="transfers-strip-header">
-					<h2 class="font-display font-semibold text-sm">Planned Transfers</h2>
+					<div class="flex items-center gap-3 min-w-0">
+						<h2 class="font-display font-semibold text-sm">Planned Transfers</h2>
+						{#if workingBank < 0}
+							<span class="over-budget-badge" role="status">
+								<svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 5.5v3.5M8 11.2v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M7.13 2.5a1 1 0 0 1 1.74 0l5.4 9.5a1 1 0 0 1-.87 1.5H2.6a1 1 0 0 1-.87-1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+								Over budget by {formatPrice(-workingBank)}m — FPL won't allow this
+							</span>
+						{/if}
+					</div>
 					<div class="flex gap-2">
 						<button onclick={saveAsOption} class="strip-btn strip-btn--accent">
 							Save as Option {String.fromCharCode(65 + savedOptions.length)}
@@ -1140,6 +1154,7 @@
 							{:else if searchResults.length > 0}
 								{#each searchResults as player}
 									{@const vfm = playerVFM(player)}
+									{@const short = transferBudget !== null ? player.now_cost - transferBudget : 0}
 									<tr
 										onclick={() => transferOutPlayer ? completeTransfer(player) : null}
 										class="border-b border-[var(--color-surface-4)]/30 hover:bg-white/[0.03] transition-colors {transferOutPlayer ? 'cursor-pointer' : 'opacity-70'}"
@@ -1153,7 +1168,11 @@
 												</div>
 											</div>
 										</td>
-										<td class="text-center font-mono text-[var(--color-text-1)]">{formatPrice(player.now_cost)}</td>
+										<td class="text-center font-mono {short > 0 ? 'text-[var(--color-fall)]' : 'text-[var(--color-text-1)]'}"
+											title={short > 0 ? `${formatPrice(short)}m more than you have for this transfer` : ''}>
+											{formatPrice(player.now_cost)}
+											{#if short > 0}<div class="text-[8px] leading-none">{formatPrice(short)} short</div>{/if}
+										</td>
 										{#each panelGwColumns as gw}
 											{@const pts = getPlayerGwPtsPanel(player, gw)}
 											<td class="text-center font-mono rounded"
@@ -1206,7 +1225,7 @@
 
 				<div class="comparison-grid">
 					{#each comparisonData as item, i}
-						<div class="comparison-card {item.verdict?.worth ? 'comparison-card--worth' : ''}">
+						<div class="comparison-card {item.verdict?.worth ? 'comparison-card--worth' : ''} {item.overBy > 0 ? 'comparison-card--over' : ''}">
 							<div class="comparison-card-header">
 								<h3 class="font-semibold text-sm">{item.name}</h3>
 								{#if i > 0}
@@ -1254,8 +1273,8 @@
 
 							{#if item.verdict}
 								<div class="comparison-verdict">
-									<span class="comparison-verdict-badge {item.verdict.worth ? 'comparison-verdict-badge--worth' : 'comparison-verdict-badge--hold'}">
-										{item.verdict.worth ? '✓ Worth it' : '✗ Hold'}
+									<span class="comparison-verdict-badge {item.overBy > 0 ? 'comparison-verdict-badge--over' : item.verdict.worth ? 'comparison-verdict-badge--worth' : 'comparison-verdict-badge--hold'}">
+										{item.overBy > 0 ? '✗ Over budget' : item.verdict.worth ? '✓ Worth it' : '✗ Hold'}
 									</span>
 									<span class="text-[var(--color-text-2)] text-[9px] leading-tight">{item.verdict.reason}</span>
 								</div>
@@ -1410,6 +1429,16 @@
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		color: var(--color-text-3);
+	}
+
+	/* These override the colours above (utility colour classes lose to this
+	   component's own styles, so they never took effect). */
+	.stat-value.is-bad,
+	.stat-label.is-bad {
+		color: var(--color-fall);
+	}
+	.stat-value.is-good {
+		color: var(--color-rise);
 	}
 
 	.stat-select {
@@ -2039,6 +2068,11 @@
 		box-shadow: 0 0 20px -8px rgba(16, 185, 129, 0.1);
 	}
 
+	.comparison-card--over {
+		border-color: rgba(239, 68, 68, 0.35);
+		box-shadow: 0 0 20px -8px rgba(239, 68, 68, 0.15);
+	}
+
 	.comparison-card-header {
 		display: flex;
 		align-items: center;
@@ -2106,6 +2140,26 @@
 	.comparison-verdict-badge--hold {
 		background: var(--color-fall-bg);
 		color: var(--color-fall);
+	}
+
+	.comparison-verdict-badge--over {
+		background: var(--color-fall);
+		color: #fff;
+		font-weight: 600;
+	}
+
+	/* Planned-transfers warning when the plan costs more than the bank */
+	.over-budget-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 3px 10px;
+		border-radius: 999px;
+		background: var(--color-fall-bg);
+		color: var(--color-fall);
+		font-size: 11px;
+		font-weight: 600;
+		white-space: nowrap;
 	}
 
 	/* ═══════════════════════════════════════════════════════════

@@ -120,6 +120,45 @@ export async function getLeagueStandingsPage(leagueId: number, page: number): Pr
 	return fplFetch<FplStandingsPage>(`leagues-classic/${leagueId}/standings/?page_standings=${page}`);
 }
 
+export type LivePrice = { now_cost: number; cost_change_start: number };
+
+// Live prices from bootstrap-static, cached briefly per server instance. Our own
+// price snapshots are only taken every few hours (GitHub runs the scheduled
+// scrape late), so after FPL's overnight price changes they can be hours stale —
+// which made affordable transfers look unaffordable. Anything that checks
+// affordability should use these.
+const LIVE_TTL_MS = 2 * 60 * 1000;
+let liveCache: { at: number; prices: Map<number, LivePrice> } | null = null;
+let liveInFlight: Promise<Map<number, LivePrice> | null> | null = null;
+
+/** Current prices straight from FPL, or null if FPL can't be reached (callers fall back). */
+export async function getLivePrices(): Promise<Map<number, LivePrice> | null> {
+	if (liveCache && Date.now() - liveCache.at < LIVE_TTL_MS) return liveCache.prices;
+	if (liveInFlight) return liveInFlight;
+	liveInFlight = (async () => {
+		try {
+			const resp = await fetch(`${FPL_BASE}/bootstrap-static/`, {
+				headers: { 'User-Agent': 'FPL-Tracker/1.0' },
+				signal: AbortSignal.timeout(6000)
+			});
+			if (!resp.ok) throw new Error(`bootstrap-static ${resp.status}`);
+			const data = await resp.json();
+			const prices = new Map<number, LivePrice>();
+			for (const e of data.elements ?? []) {
+				prices.set(e.id, { now_cost: e.now_cost, cost_change_start: e.cost_change_start });
+			}
+			liveCache = { at: Date.now(), prices };
+			return prices;
+		} catch (err) {
+			console.error('live prices unavailable, using snapshot prices:', err);
+			return liveCache?.prices ?? null;   // a slightly older live copy beats the snapshot
+		} finally {
+			liveInFlight = null;
+		}
+	})();
+	return liveInFlight;
+}
+
 /**
  * Reconstruct purchase prices for the current squad.
  * 
