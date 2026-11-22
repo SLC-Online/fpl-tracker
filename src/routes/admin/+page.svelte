@@ -99,10 +99,18 @@
 <div class="max-w-2xl space-y-8">
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Admin</h1>
-		<a href="/admin/data"
-			class="text-sm px-3 py-1.5 rounded-lg bg-[var(--color-surface-3)] text-[var(--color-text-1)] hover:text-[var(--color-text-0)] hover:bg-[var(--color-surface-4)] transition-colors">
-			View captured data →
-		</a>
+		<div class="flex items-center gap-2">
+			<a href="/admin/data"
+				class="text-sm px-3 py-1.5 rounded-lg bg-[var(--color-surface-3)] text-[var(--color-text-1)] hover:text-[var(--color-text-0)] hover:bg-[var(--color-surface-4)] transition-colors">
+				View captured data →
+			</a>
+			<form method="POST" action="/admin/logout">
+				<button type="submit"
+					class="text-sm px-3 py-1.5 rounded-lg text-[var(--color-text-2)] hover:text-[var(--color-text-0)] hover:bg-[var(--color-surface-3)] transition-colors">
+					Sign out
+				</button>
+			</form>
+		</div>
 	</div>
 
 	<TaSyncCard />
