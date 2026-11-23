@@ -1,6 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import { getEntry, getEventPicks, getTransfers, getHistory, calculateSellingPrice, getLivePrices } from '$lib/server/fpl-api';
 import { supabaseAdmin } from '$lib/supabase-server';
+import { getPriceHistory } from '$lib/server/price-history';
+import { replayPurchasePrices } from '$lib/purchase-prices';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -35,13 +37,21 @@ export const GET: RequestHandler = async ({ url }) => {
 				throw error(404, 'No squad data available yet');
 			}
 		}
+		// During a Free Hit, FPL shows the temporary squad. Plan from the real
+		// one, which comes back afterwards: the squad from the week before.
+		const shownPicks = picks;
+		if (picks.active_chip === 'freehit' && picks.entry_history.event > 1) {
+			picks = await getEventPicks(managerId, picks.entry_history.event - 1);
+		}
 
 		// 4. Get all transfers this season + chip history (for accurate FT calc)
 		const transfers = await getTransfers(managerId);
 		let chips: any[] = [];
+		let historyCurrent: { event: number; bank: number }[] = [];
 		try {
 			const history = await getHistory(managerId);
 			chips = history.chips || [];
+			historyCurrent = history.current || [];
 		} catch {
 			chips = [];
 		}
@@ -78,24 +88,45 @@ export const GET: RequestHandler = async ({ url }) => {
 			if (lp) priceMap.set(id, { now_cost: lp.now_cost, cost_change_start: lp.cost_change_start });
 		}
 
-		// 7. Reconstruct purchase prices
-		// Build a map of element_id → purchase_price from transfer history
+		// 7. Purchase prices: replay the season (first squad, then every
+		// transfer, skipping Free Hit weeks) and check the result against FPL's
+		// own sale prices and banks. See $lib/purchase-prices.
 		const purchasePriceMap = new Map<number, number>();
-
-		// For transfers IN: the element_in_cost is the purchase price
-		for (const t of transfers) {
-			purchasePriceMap.set(t.element_in, t.element_in_cost);
-		}
-
-		// For players NOT in transfer history: they were in the GW1 squad
-		// Their purchase price = starting price = current_price - cost_change_start
-		for (const pick of picks.picks) {
-			if (!purchasePriceMap.has(pick.element)) {
-				const priceData = priceMap.get(pick.element);
-				if (priceData) {
-					purchasePriceMap.set(pick.element, priceData.now_cost - priceData.cost_change_start);
-				}
-			}
+		let pricesVerified = false;
+		let priceProblems: string[] = [];
+		let sellingUncertain: { id: number; options: number[] }[] = [];
+		try {
+			const live = await getLivePrices();
+			if (!live) throw new Error('FPL live prices unavailable');
+			const startPrice = new Map<number, number>();
+			const currentPrices = new Map<number, number>();
+			for (const [id, lp] of live) { startPrice.set(id, lp.now_cost - lp.cost_change_start); currentPrices.set(id, lp.now_cost); }
+			const { data: events } = await supabaseAdmin.from('events').select('event_id, deadline_time').order('event_id');
+			const deadline = new Map((events ?? []).map((e: any) => [e.event_id, e.deadline_time as string]));
+			const startedEvent: number = (entry as any).started_event ?? 1;
+			const firstPicks = startedEvent === picks.entry_history.event ? picks : await getEventPicks(managerId, startedEvent);
+			const history = await getPriceHistory(startPrice);
+			const r = replayPurchasePrices({
+				startedEvent,
+				joinedTime: (entry as any).joined_time,
+				firstDeadline: deadline.get(1)!,
+				startedDeadline: deadline.get(startedEvent)!,
+				firstPicks: firstPicks.picks.map((p) => p.element),
+				currentPicks: picks.picks.map((p) => p.element),
+				currentEvent: picks.entry_history.event,
+				transfers,
+				chips,
+				bankByEvent: new Map(historyCurrent.map((h) => [h.event, h.bank])),
+				priceAt: history.priceAt,
+				pricesBetween: history.pricesBetween,
+				currentPrices
+			});
+			for (const [id, p] of r.purchase) purchasePriceMap.set(id, p);
+			pricesVerified = r.verified;
+			priceProblems = r.problems;
+			sellingUncertain = r.sellingUncertain ?? [];
+		} catch (e: any) {
+			priceProblems = [`could not rebuild purchase prices: ${e.message}`];
 		}
 
 		// 8. Get projections for these players (use latest upload only, skip played GWs)
@@ -155,7 +186,12 @@ export const GET: RequestHandler = async ({ url }) => {
 		const squad = picks.picks.map(pick => {
 			const player = playerMap.get(pick.element);
 			const priceData = priceMap.get(pick.element);
-			const purchasePrice = purchasePriceMap.get(pick.element) || priceData?.now_cost || 0;
+			// Fallback if the replay couldn't run: the most recent purchase
+			// (FPL lists transfers newest first), else the start price.
+			const fallbackBuy = transfers.find((t) => t.element_in === pick.element)?.element_in_cost
+				?? (priceData ? priceData.now_cost - priceData.cost_change_start : 0);
+			const purchasePrice = purchasePriceMap.get(pick.element) ?? fallbackBuy;
+			const uncertain = sellingUncertain.find((u) => u.id === pick.element);
 			const currentPrice = priceData?.now_cost || 0;
 			const sellingPrice = calculateSellingPrice(purchasePrice, currentPrice);
 			const playerProjections = projectionMap.get(pick.element) || [];
@@ -180,6 +216,9 @@ export const GET: RequestHandler = async ({ url }) => {
 				current_price: currentPrice,
 				purchase_price: purchasePrice,
 				selling_price: sellingPrice,
+				// Set when public data allows more than one selling price: the
+				// user has to confirm which (FPL app > Transfers shows it).
+				selling_options: uncertain?.options ?? null,
 				// Projections + VFM (value-for-money, sourced from bcv)
 				projections: playerProjections,
 				bcv: bcvMap.get(pick.element) ?? null,
@@ -234,11 +273,14 @@ export const GET: RequestHandler = async ({ url }) => {
 			squad,
 			bank: picks.entry_history.bank,
 			squad_value: picks.entry_history.value,
-			total_points: picks.entry_history.total_points,
-			gameweek: picks.entry_history.event,
+			total_points: shownPicks.entry_history.total_points,
+			gameweek: shownPicks.entry_history.event,
 			transfers_made: transfers.length,
 			free_transfers: freeTransfers,
-			active_chip: picks.active_chip,
+			active_chip: shownPicks.active_chip,
+			// Purchase prices rebuilt and checked against FPL's own figures.
+			prices_verified: pricesVerified,
+			price_problems: priceProblems,
 		});
 	} catch (e: any) {
 		if (e.status) throw e;  // Re-throw SvelteKit errors
