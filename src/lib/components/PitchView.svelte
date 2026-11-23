@@ -11,11 +11,11 @@
 		captainId?: number | null;
 		/** Players coming in under a previewed plan */
 		newIds?: number[];
-		/** Line under each name (e.g. this week's fixture and points); defaults to price */
-		subline?: (p: SquadPlayer) => string;
+		/** This week's fixtures (FPL difficulty 1-5) and projected points, shown under the name instead of the price */
+		weekInfo?: (p: SquadPlayer) => { fixtures: { label: string; fdr: number }[]; pts: string | null; known: boolean };
 	}
 
-	let { starting, bench, onPlayerClick, selectedId = null, captainId = null, newIds = [], subline }: Props = $props();
+	let { starting, bench, onPlayerClick, selectedId = null, captainId = null, newIds = [], weekInfo }: Props = $props();
 
 	function formatPrice(cost: number): string {
 		return `£${(cost / 10).toFixed(1)}`;
@@ -32,6 +32,21 @@
 	let mids = $derived(starting.filter((p) => p.element_type === 3));
 	let fwds = $derived(starting.filter((p) => p.element_type === 4));
 </script>
+
+{#snippet info(player: SquadPlayer)}
+	{#if weekInfo}
+		{@const w = weekInfo(player)}
+		<span class="wk-line">
+			{#if w.known}
+				{#each w.fixtures as f}<span class="fx fdr-{f.fdr}">{f.label}</span>{/each}
+				{#if !w.fixtures.length}<span class="fx fx-none">No match</span>{/if}
+			{/if}
+			{#if w.pts !== null}<span class="wk-pts">{w.pts}</span>{/if}
+		</span>
+	{:else}
+		<span class="player-price">{formatPrice(player.current_price)}</span>
+	{/if}
+{/snippet}
 
 <div class="pitch-wrapper">
 	<!-- Main pitch -->
@@ -206,7 +221,7 @@
 						<div class="player-name-pill">
 							<span class="player-name-text">{player.web_name}</span>
 						</div>
-						<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
+						{@render info(player)}
 					</button>
 				{/each}
 			</div>
@@ -229,7 +244,7 @@
 						<div class="player-name-pill">
 							<span class="player-name-text">{player.web_name}</span>
 						</div>
-						<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
+						{@render info(player)}
 					</button>
 				{/each}
 			</div>
@@ -252,7 +267,7 @@
 						<div class="player-name-pill">
 							<span class="player-name-text">{player.web_name}</span>
 						</div>
-						<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
+						{@render info(player)}
 					</button>
 				{/each}
 			</div>
@@ -275,7 +290,7 @@
 						<div class="player-name-pill">
 							<span class="player-name-text">{player.web_name}</span>
 						</div>
-						<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
+						{@render info(player)}
 					</button>
 				{/each}
 			</div>
@@ -302,7 +317,7 @@
 					<div class="player-name-pill">
 						<span class="player-name-text">{player.web_name}</span>
 					</div>
-					<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
+					{@render info(player)}
 				</button>
 			{/each}
 		</div>
@@ -481,6 +496,24 @@
 	/* ═══════════════════════════════════════════════
 	   PRICE LABEL
 	   ═══════════════════════════════════════════════ */
+	.wk-line { display: flex; align-items: center; justify-content: center; gap: 3px; flex-wrap: wrap; max-width: 110px; }
+	.fx {
+		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+		font-size: 8.5px;
+		font-weight: 600;
+		line-height: 1;
+		padding: 2px 4px;
+		border-radius: 3px;
+		white-space: nowrap;
+	}
+	/* FPL's fixture difficulty colours */
+	.fdr-1 { background: #375523; color: #fff; }
+	.fdr-2 { background: #01fc7a; color: #0b1b10; }
+	.fdr-3 { background: #e7e7e7; color: #1f2937; }
+	.fdr-4 { background: #ff1751; color: #fff; }
+	.fdr-5 { background: #80072d; color: #fff; }
+	.fx-none { background: rgba(15, 23, 42, 0.7); color: rgba(255, 255, 255, 0.6); }
+	.wk-pts { font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; font-size: 9px; font-weight: 600; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 	.player-price {
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
 		font-size: 9px;

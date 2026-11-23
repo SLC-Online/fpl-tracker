@@ -43,4 +43,17 @@ if (benchSame > 0) {
 	const want = starters.reduce((s, p) => s + pts(p), 0) + pts(cap);
 	check(Math.abs(r4.weeks[1].points - want) < 1e-9 && r4.weeks[1].manualLineup, `manual line-up GW${gws[1]}: ${r4.weeks[1].points.toFixed(2)} vs ${want.toFixed(2)} (auto ${w.points.toFixed(2)})`);
 }
+// 4. Hand-picked captain: week 0, captain the lowest-scoring starter instead.
+{
+	const w0 = none.weeks[0];
+	const pts = (p) => p.projections.find((x) => x.gw === gws[0])?.pts ?? 0;
+	const starters = w0.squad.slice(0, 11);
+	const low = starters.reduce((m, p) => (pts(p) < pts(m) ? p : m), starters[0]);
+	const top = starters.find((p) => p.element_id === w0.captain);
+	const r5 = evaluatePlan(ctx, { transfers: [], lineups: {}, captains: { [gws[0]]: low.element_id } });
+	check(r5.weeks[0].captain === low.element_id && Math.abs(r5.weeks[0].points - (w0.points - pts(top) + pts(low))) < 1e-9, `captain ${low.web_name}: ${r5.weeks[0].points.toFixed(2)} (auto ${w0.points.toFixed(2)}, ${top.web_name} ${pts(top)} → ${pts(low)})`);
+	const bench = w0.squad[12];
+	const r6 = evaluatePlan(ctx, { transfers: [], lineups: {}, captains: { [gws[0]]: bench.element_id } });
+	check(r6.weeks[0].captain === w0.captain && r6.weeks[0].problems.length === 1, `benched captain falls back to ${top.web_name} and is flagged`);
+}
 console.log(fails ? `${fails} failed` : 'All passed');

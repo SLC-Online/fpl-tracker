@@ -18,6 +18,8 @@ export interface Plan {
 	transfers: PlanTransfer[];
 	/** Hand-picked order for a week: 15 ids, first 11 start. Only weeks the user changed. */
 	lineups: Record<number, number[]>;
+	/** Hand-picked captain for a week (must start that week). */
+	captains?: Record<number, number>;
 }
 
 export interface PlanWeek {
@@ -25,6 +27,7 @@ export interface PlanWeek {
 	squad: SquadPlayer[];          // starters (11) then bench (4)
 	captain: number | null;
 	manualLineup: boolean;
+	manualCaptain: boolean;
 	points: number;                // this week, captain included
 	freeTransfers: number;         // available going into the week
 	transfersMade: number;
@@ -108,22 +111,27 @@ export function evaluatePlan(ctx: PlanContext, plan: Plan): PlanResult {
 		}
 		let captain: number | null = null;
 		let points = 0;
-		if (ordered) {
-			const starters = ordered.slice(0, 11);
-			let cap = starters[0];
-			for (const s of starters) if (pts(s) > pts(cap)) cap = s;
-			captain = cap.element_id;
-			points = starters.reduce((s, p) => s + pts(p), 0) + pts(cap);
-		} else {
+		const manualLineupUsed = ordered !== null;
+		if (!ordered) {
 			const d = bestXiDetail(squad.map((p) => solverPlayer(p, ctx.gws)), wk);
-			if (d) {
-				ordered = [...d.starters, ...d.bench].map((id) => byId.get(id)!);
-				captain = d.captain;
-				points = d.points;
-			} else ordered = squad;
+			ordered = d ? [...d.starters, ...d.bench].map((id) => byId.get(id)!) : squad;
 		}
+		// Captain: the user's pick if he starts this week, else the top starter
+		// (first in line-up order on a tie, as in bestXiDetail).
+		const starters = ordered.slice(0, 11);
+		let cap = starters[0];
+		for (const s of starters) if (pts(s) > pts(cap)) cap = s;
+		const wanted = plan.captains?.[gw];
+		let manualCaptain = false;
+		if (wanted !== undefined) {
+			const pick = starters.find((p) => p.element_id === wanted);
+			if (pick) { cap = pick; manualCaptain = true; }
+			else problems.push(`GW${gw}: your captain isn't starting; captaining the top starter`);
+		}
+		captain = cap?.element_id ?? null;
+		points = starters.reduce((s, p) => s + pts(p), 0) + (cap ? pts(cap) : 0);
 
-		weeks.push({ gw, squad: ordered, captain, manualLineup: !!manual && ordered !== null && !problems.some((p) => p.includes('line-up')), points, freeTransfers: unlimited ? Infinity : ft, transfersMade: made.length, hits: weekHits, bank, problems });
+		weeks.push({ gw, squad: ordered, captain, manualLineup: manualLineupUsed, manualCaptain, points, freeTransfers: unlimited ? Infinity : ft, transfersMade: made.length, hits: weekHits, bank, problems });
 		twxp += points * Math.pow(ctx.decay, i);
 		hits += weekHits;
 		all.push(...problems);

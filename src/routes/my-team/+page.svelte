@@ -58,12 +58,15 @@
 		name: string;
 		transfers: PlanTransfer[];
 		lineups: Record<number, number[]>;
+		captains: Record<number, number>;
 	}
 	let savedOptions: PlanOption[] = $state([]);
 	// Planned transfers, each tied to the gameweek it's made in.
 	let currentTransfers: PlanTransfer[] = $state([]);
 	// Hand-picked line-ups by gameweek (15 ids, first 11 start); other weeks use the best XI.
 	let lineups = $state<Record<number, number[]>>({});
+	// Hand-picked captains by gameweek; other weeks captain the top starter.
+	let captains = $state<Record<number, number>>({});
 	// Which gameweek the pitch is showing (index into planGws).
 	let viewWeek = $state(0);
 	let transferMode = $state(false);
@@ -106,6 +109,7 @@
 			savedOptions = [];
 			currentTransfers = [];
 			lineups = {};
+			captains = {};
 			viewWeek = 0;
 			freeTransfers = squadData.free_transfers ?? 1;
 			const m = squadData.manager;
@@ -185,7 +189,7 @@
 		gws: planGws,
 		decay: DECAY,
 	});
-	let planEval = $derived(evaluatePlan(planCtx, { transfers: currentTransfers, lineups }));
+	let planEval = $derived(evaluatePlan(planCtx, { transfers: currentTransfers, lineups, captains }));
 	let baseEval = $derived(evaluatePlan(planCtx, { transfers: [], lineups: {} }));
 	let baseTWxP = $derived(baseEval.twxp);
 	let week = $derived(planEval.weeks[Math.min(viewWeek, Math.max(0, planEval.weeks.length - 1))]);
@@ -567,6 +571,8 @@
 			next[+g] = +g >= viewGw ? order.map((id) => (id === outId ? inPlayer.element_id : id)) : order;
 		}
 		lineups = next;
+		// A captain sold from this week on goes; those weeks captain the top starter.
+		captains = Object.fromEntries(Object.entries(captains).filter(([g, id]) => !(+g >= viewGw && id === outId)));
 		deselectPlayer();
 	}
 
@@ -586,20 +592,23 @@
 	function resetTransfers() {
 		currentTransfers = [];
 		lineups = {};
+		captains = {};
 		transferMode = false;
 		transferOutPlayer = null;
 	}
 
 	function saveAsOption() {
-		if (currentTransfers.length === 0 && Object.keys(lineups).length === 0) return;
+		if (currentTransfers.length === 0 && Object.keys(lineups).length === 0 && Object.keys(captains).length === 0) return;
 		savedOptions = [...savedOptions, {
 			id: crypto.randomUUID(),
 			name: `Option ${String.fromCharCode(65 + savedOptions.length)}`,
 			transfers: [...currentTransfers],
 			lineups: { ...lineups },
+			captains: { ...captains },
 		}];
 		currentTransfers = [];
 		lineups = {};
+		captains = {};
 	}
 
 	function deleteOption(idx: number) {
@@ -609,9 +618,9 @@
 	// --- Comparison: every option re-scored week by week with the same rules ---
 	let comparisonData = $derived.by(() => {
 		const all = [
-			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as PlanTransfer[], lineupWeeks: [] as number[], verdict: null as any, overBy: 0 },
+			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as PlanTransfer[], lineupWeeks: [] as number[], captainWeeks: [] as { gw: number; name: string }[], verdict: null as any, overBy: 0 },
 			...savedOptions.map((o) => {
-				const r = evaluatePlan(planCtx, { transfers: o.transfers, lineups: o.lineups });
+				const r = evaluatePlan(planCtx, { transfers: o.transfers, lineups: o.lineups, captains: o.captains });
 				const net = r.twxp - baseTWxP - r.hits;
 				const over = Math.max(0, ...r.weeks.map((w) => -w.bank));
 				const illegal = r.problems.find((p) => !p.includes('line-up'));
@@ -622,6 +631,7 @@
 					netGain: net,
 					transfers: o.transfers,
 					lineupWeeks: Object.keys(o.lineups).map(Number).sort((a, b) => a - b),
+					captainWeeks: Object.entries(o.captains).map(([g, id]) => ({ gw: +g, name: asSquadPlayer(id)?.web_name ?? '' })).sort((a, b) => a.gw - b.gw),
 					// An option FPL wouldn't accept can't be "worth it", whatever its points.
 					verdict: illegal
 						? { worth: false, reason: illegal }
@@ -680,13 +690,13 @@
 			.then((r) => (r.ok ? r.json() : null))
 			.then((d) => { if (d && !d.error) fixtureData = d; });
 	});
-	// "gw:team" -> opponents that week, e.g. ["ARS (H)"]; empty for a blank.
+	// "gw:team" -> that week's opponents with FPL difficulty; empty for a blank.
 	let fixtureLabels = $derived.by(() => {
-		const m = new Map<string, string[]>();
+		const m = new Map<string, { label: string; fdr: number }[]>();
 		for (const f of fixtureData?.fixtures ?? []) {
 			const h = `${f.event}:${f.team_h}`, a = `${f.event}:${f.team_a}`;
-			m.set(h, [...(m.get(h) ?? []), `${fixtureData!.teams[f.team_a]} (H)`]);
-			m.set(a, [...(m.get(a) ?? []), `${fixtureData!.teams[f.team_h]} (A)`]);
+			m.set(h, [...(m.get(h) ?? []), { label: `${fixtureData!.teams[f.team_a]} (H)`, fdr: f.team_h_difficulty }]);
+			m.set(a, [...(m.get(a) ?? []), { label: `${fixtureData!.teams[f.team_h]} (A)`, fdr: f.team_a_difficulty }]);
 		}
 		return m;
 	});
@@ -695,12 +705,14 @@
 		for (const f of fixtureData?.fixtures ?? []) if (!m.has(f.event) || f.kickoff_time < m.get(f.event)!) m.set(f.event, f.kickoff_time);
 		return m;
 	});
-	function pitchSubline(p: SquadPlayer): string {
+	function pitchWeekInfo(p: SquadPlayer) {
 		const team = teamIdOf.get(p.element_id);
-		const opp = team !== undefined ? fixtureLabels.get(`${viewGw}:${team}`) : undefined;
 		const pts = (p.projections || []).find((x) => x.gw === viewGw)?.pts;
-		const fx = !fixtureData ? '' : opp?.length ? opp.join(', ') : 'No match';
-		return [fx, pts != null ? formatPts(pts) : ''].filter(Boolean).join(' · ');
+		return {
+			fixtures: (team !== undefined ? fixtureLabels.get(`${viewGw}:${team}`) : undefined) ?? [],
+			pts: pts != null ? formatPts(pts) : null,
+			known: !!fixtureData && team !== undefined,
+		};
 	}
 	// A transfer's own gain: the incoming player's decayed points minus the
 	// outgoing one's, from the week it's made (weights as in the plan).
@@ -966,7 +978,7 @@
 		<!-- ═══════════════════════════════════════════════════════════════
 		     PLANNED TRANSFERS STRIP
 		     ═══════════════════════════════════════════════════════════════ -->
-		{#if currentTransfers.length > 0 || Object.keys(lineups).length > 0}
+		{#if currentTransfers.length > 0 || Object.keys(lineups).length > 0 || Object.keys(captains).length > 0}
 			<section class="transfers-strip">
 				<div class="transfers-strip-header">
 					<div class="flex items-center gap-3 min-w-0">
@@ -988,7 +1000,7 @@
 					</div>
 				</div>
 				<div class="plan-weeks">
-					{#each planEval.weeks.filter((w) => w.transfersMade || w.manualLineup) as w}
+					{#each planEval.weeks.filter((w) => w.transfersMade || w.manualLineup || w.manualCaptain) as w}
 						<div class="plan-week">
 							<button class="plan-week-head" onclick={() => (viewWeek = planGws.indexOf(w.gw))} title="Show this week on the pitch">
 								<span class="gw-tag">GW{w.gw}</span>
@@ -998,6 +1010,7 @@
 										{w.freeTransfers === Infinity ? 'unlimited' : `${w.freeTransfers} free`}{w.hits ? ` · −${w.hits} hit` : ' · no hit'}
 									{/if}
 									{#if w.manualLineup}{w.transfersMade ? ' · ' : ''}line-up picked by hand{/if}
+									{#if w.manualCaptain}{w.transfersMade || w.manualLineup ? ' · ' : ''}{w.squad.find((p) => p.element_id === w.captain)?.web_name} captain{/if}
 								</span>
 							</button>
 							<div class="transfers-strip-list">
@@ -1043,9 +1056,14 @@
 						>List</button>
 					</div>
 					{#if selectedPlayer}
-						<span class="text-[10px] text-[var(--color-accent-light)]">
-							<strong class="font-semibold">{selectedPlayer.web_name}</strong> selected
-							<button onclick={deselectPlayer} class="ml-1.5 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">✕</button>
+						{@const sel = selectedPlayer}
+						{@const starts = !!week && week.squad.slice(0, 11).some((p) => p.element_id === sel.element_id)}
+						<span class="flex items-center gap-2 text-[10px] text-[var(--color-accent-light)]">
+							<span><strong class="font-semibold">{sel.web_name}</strong> selected · click another player to swap, or pick a replacement on the right</span>
+							{#if starts && week?.captain !== sel.element_id}
+								<button class="make-cap" onclick={() => { captains = { ...captains, [viewGw]: sel.element_id }; deselectPlayer(); }}>Make captain GW{viewGw}</button>
+							{/if}
+							<button onclick={deselectPlayer} class="text-[var(--color-text-3)] hover:text-[var(--color-fall)]" aria-label="Clear selection">✕</button>
 						</span>
 					{/if}
 				</div>
@@ -1078,7 +1096,7 @@
 								{@const w = planEval.weeks[i]}
 								<button class="gw-chip" class:on={i === viewWeek} onclick={() => (viewWeek = i)} title={w?.transfersMade ? `${w.transfersMade} transfer${w.transfersMade > 1 ? 's' : ''}` : ''}>
 									{g}
-									{#if w && (w.transfersMade || w.manualLineup)}<span class="gw-chip-dot" class:lineup={!w.transfersMade}></span>{/if}
+									{#if w && (w.transfersMade || w.manualLineup || w.manualCaptain)}<span class="gw-chip-dot" class:lineup={!w.transfersMade}></span>{/if}
 								</button>
 							{/each}
 						</div>
@@ -1086,6 +1104,12 @@
 							<div class="gw-nav-note">
 								You've picked this week's line-up by hand.
 								<button onclick={() => { const n = { ...lineups }; delete n[viewGw]; lineups = n; }}>Use the best XI</button>
+							</div>
+						{/if}
+						{#if !solverPreview && wk?.manualCaptain}
+							<div class="gw-nav-note">
+								You've picked this week's captain.
+								<button onclick={() => { const n = { ...captains }; delete n[viewGw]; captains = n; }}>Captain the top starter</button>
 							</div>
 						{/if}
 						{#if !solverPreview && wk?.problems.length}
@@ -1113,7 +1137,7 @@
 						onPlayerClick={solverPreview ? undefined : onPitchPlayerClick}
 						selectedId={solverPreview ? null : selectedPlayer?.element_id}
 						captainId={solverPreview ? (previewDetail?.captain ?? null) : (week?.captain ?? null)}
-						subline={pitchSubline}
+						weekInfo={pitchWeekInfo}
 						newIds={solverPreview ? solverPreview.transfers.map((t) => t.in) : []}
 					/>
 				{:else}
@@ -1452,7 +1476,7 @@
 								{/if}
 							</div>
 
-							{#if item.transfers.length > 0 || item.lineupWeeks.length > 0}
+							{#if item.transfers.length > 0 || item.lineupWeeks.length > 0 || item.captainWeeks.length > 0}
 								<div class="space-y-1 mb-3">
 									{#each item.transfers as t}
 										<div class="flex items-center gap-1.5 text-[10px]">
@@ -1465,6 +1489,11 @@
 									{#each item.lineupWeeks as g}
 										<div class="flex items-center gap-1.5 text-[10px] text-[var(--color-text-2)]">
 											<span class="gw-tag">GW{g}</span> line-up picked by hand
+										</div>
+									{/each}
+									{#each item.captainWeeks as c}
+										<div class="flex items-center gap-1.5 text-[10px] text-[var(--color-text-2)]">
+											<span class="gw-tag">GW{c.gw}</span> {c.name} captain
 										</div>
 									{/each}
 								</div>
@@ -1959,6 +1988,16 @@
 		color: var(--color-accent-light);
 	}
 	.plan-weeks { display: flex; flex-direction: column; gap: 10px; }
+	.make-cap {
+		flex-shrink: 0;
+		padding: 3px 8px;
+		border-radius: 6px;
+		background: var(--color-accent);
+		color: #fff;
+		font-size: 10px;
+		font-weight: 600;
+	}
+	.make-cap:hover { background: var(--color-accent-light); }
 	.plan-week-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 	.plan-week-meta { font-size: 11px; color: var(--color-text-2); }
 	.solver-pane { display: flex; flex-direction: column; }
