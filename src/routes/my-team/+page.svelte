@@ -10,7 +10,8 @@
 		DECAY, type SquadPlayer
 	} from '$lib/transfer-engine';
 	import PitchView from '$lib/components/PitchView.svelte';
-	import { evaluatePlan, solverPlayer, type PlanTransfer } from '$lib/plan';
+	import { evaluatePlan, solverPlayer, CHIP_LABEL, type PlanTransfer, type ChipName } from '$lib/plan';
+	import type { MultiPlan } from '$lib/components/MultiSolver.svelte';
 	import { bestXiDetail } from '$lib/solver/fpl-solver';
 	import SolverPanel, { type SolverPreview } from '$lib/components/SolverPanel.svelte';
 
@@ -59,6 +60,8 @@
 		transfers: PlanTransfer[];
 		lineups: Record<number, number[]>;
 		captains: Record<number, number>;
+		chips: Record<number, ChipName>;
+		freeHitIds: Record<number, number[]>;
 	}
 	let savedOptions: PlanOption[] = $state([]);
 	// Planned transfers, each tied to the gameweek it's made in.
@@ -67,8 +70,14 @@
 	let lineups = $state<Record<number, number[]>>({});
 	// Hand-picked captains by gameweek; other weeks captain the top starter.
 	let captains = $state<Record<number, number>>({});
+	// Chips by gameweek, and the temporary squad (ids) for any Free Hit week.
+	let planChips = $state<Record<number, ChipName>>({});
+	let freeHitIds = $state<Record<number, number[]>>({});
 	// Which gameweek the pitch is showing (index into planGws).
 	let viewWeek = $state(0);
+	// Weeks ahead and decay: set in the Solver, used everywhere on the page.
+	let horizonWeeks = $state(8);
+	let decay = $state(DECAY);
 	let transferMode = $state(false);
 	let transferOutPlayer: SquadPlayer | null = $state(null);
 	let searchQuery = $state('');
@@ -110,6 +119,8 @@
 			currentTransfers = [];
 			lineups = {};
 			captains = {};
+			planChips = {};
+			freeHitIds = {};
 			viewWeek = 0;
 			freeTransfers = squadData.free_transfers ?? 1;
 			const m = squadData.manager;
@@ -177,8 +188,9 @@
 		const gws = new Set<number>();
 		for (const p of allPlayers) for (const pr of p.projections || []) gws.add(pr.gw);
 		for (const p of baseSquad) for (const pr of p.projections || []) gws.add(pr.gw);
-		return [...gws].sort((a, b) => a - b).slice(0, 8);
+		return [...gws].sort((a, b) => a - b).slice(0, horizonWeeks);
 	});
+	$effect(() => { if (viewWeek > planGws.length - 1) viewWeek = Math.max(0, planGws.length - 1); });
 	let teamIdOf = $derived(new Map<number, number>(allPlayers.map((p: any) => [p.element_id, p.team_id])));
 	let planCtx = $derived({
 		base: baseSquad,
@@ -187,9 +199,10 @@
 		freeTransfers: effectiveFreeTransfers,
 		realFreeTransfers: Math.max(0, (squadData?.free_transfers ?? 1) - declaredTransfers.length),
 		gws: planGws,
-		decay: DECAY,
+		decay,
 	});
-	let planEval = $derived(evaluatePlan(planCtx, { transfers: currentTransfers, lineups, captains }));
+	let freeHitSquads = $derived(Object.fromEntries(Object.entries(freeHitIds).map(([g, ids]) => [g, ids.map(asSquadPlayer).filter(Boolean) as SquadPlayer[]])));
+	let planEval = $derived(evaluatePlan(planCtx, { transfers: currentTransfers, lineups, captains, chips: planChips, freeHitSquads }));
 	let baseEval = $derived(evaluatePlan(planCtx, { transfers: [], lineups: {} }));
 	let baseTWxP = $derived(baseEval.twxp);
 	let week = $derived(planEval.weeks[Math.min(viewWeek, Math.max(0, planEval.weeks.length - 1))]);
@@ -564,6 +577,14 @@
 			bcv: inPlayer.bcv,
 		};
 		const outId = transferOutPlayer.element_id;
+		if (planChips[viewGw] === 'freehit') {
+			// A Free Hit week changes only this week's temporary squad.
+			const ids = freeHitIds[viewGw] ?? week.squad.map((p) => p.element_id);
+			freeHitIds = { ...freeHitIds, [viewGw]: ids.map((id) => (id === outId ? inPlayer.element_id : id)) };
+			if (lineups[viewGw]) lineups = { ...lineups, [viewGw]: lineups[viewGw].map((id) => (id === outId ? inPlayer.element_id : id)) };
+			deselectPlayer();
+			return;
+		}
 		currentTransfers = [...currentTransfers, { gw: viewGw, out: transferOutPlayer, in: inSquadPlayer }];
 		// Hand-picked line-ups from this week on: the new player takes the old one's place.
 		const next: Record<number, number[]> = {};
@@ -593,22 +614,28 @@
 		currentTransfers = [];
 		lineups = {};
 		captains = {};
+		planChips = {};
+		freeHitIds = {};
 		transferMode = false;
 		transferOutPlayer = null;
 	}
 
 	function saveAsOption() {
-		if (currentTransfers.length === 0 && Object.keys(lineups).length === 0 && Object.keys(captains).length === 0) return;
+		if (currentTransfers.length === 0 && !Object.keys(lineups).length && !Object.keys(captains).length && !Object.keys(planChips).length) return;
 		savedOptions = [...savedOptions, {
 			id: crypto.randomUUID(),
 			name: `Option ${String.fromCharCode(65 + savedOptions.length)}`,
 			transfers: [...currentTransfers],
 			lineups: { ...lineups },
 			captains: { ...captains },
+			chips: { ...planChips },
+			freeHitIds: { ...freeHitIds },
 		}];
 		currentTransfers = [];
 		lineups = {};
 		captains = {};
+		planChips = {};
+		freeHitIds = {};
 	}
 
 	function deleteOption(idx: number) {
@@ -618,9 +645,10 @@
 	// --- Comparison: every option re-scored week by week with the same rules ---
 	let comparisonData = $derived.by(() => {
 		const all = [
-			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as PlanTransfer[], lineupWeeks: [] as number[], captainWeeks: [] as { gw: number; name: string }[], verdict: null as any, overBy: 0 },
+			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as PlanTransfer[], lineupWeeks: [] as number[], captainWeeks: [] as { gw: number; name: string }[], chipWeeks: [] as { gw: number; chip: string }[], verdict: null as any, overBy: 0 },
 			...savedOptions.map((o) => {
-				const r = evaluatePlan(planCtx, { transfers: o.transfers, lineups: o.lineups, captains: o.captains });
+				const fhs = Object.fromEntries(Object.entries(o.freeHitIds).map(([g, ids]) => [g, ids.map(asSquadPlayer).filter(Boolean) as SquadPlayer[]]));
+				const r = evaluatePlan(planCtx, { transfers: o.transfers, lineups: o.lineups, captains: o.captains, chips: o.chips, freeHitSquads: fhs });
 				const net = r.twxp - baseTWxP - r.hits;
 				const over = Math.max(0, ...r.weeks.map((w) => -w.bank));
 				const illegal = r.problems.find((p) => !p.includes('line-up'));
@@ -631,6 +659,7 @@
 					netGain: net,
 					transfers: o.transfers,
 					lineupWeeks: Object.keys(o.lineups).map(Number).sort((a, b) => a - b),
+					chipWeeks: Object.entries(o.chips).map(([g, c]) => ({ gw: +g, chip: CHIP_LABEL[c] })).sort((a, b) => a.gw - b.gw),
 					captainWeeks: Object.entries(o.captains).map(([g, id]) => ({ gw: +g, name: asSquadPlayer(id)?.web_name ?? '' })).sort((a, b) => a.gw - b.gw),
 					// An option FPL wouldn't accept can't be "worth it", whatever its points.
 					verdict: illegal
@@ -722,13 +751,63 @@
 			if (gw < t.gw) return;
 			const pin = (t.in.projections || []).find((x) => x.gw === gw)?.pts ?? 0;
 			const pout = (t.out.projections || []).find((x) => x.gw === gw)?.pts ?? 0;
-			g += (pin - pout) * Math.pow(DECAY, i);
+			g += (pin - pout) * Math.pow(decay, i);
 		});
 		return g;
 	}
 	function fmtKickoff(iso: string | undefined) {
 		if (!iso) return '';
 		return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+	}
+
+	// --- Chips in the planner ---
+	let chipWindows = $derived((squadData?.chips_available ?? []) as { name: string; start: number; stop: number }[]);
+	// Chips that can go in a week: available in that week's window and not already planned elsewhere in it.
+	function chipsForWeek(gw: number): ChipName[] {
+		return chipWindows
+			.filter((w) => gw >= w.start && gw <= w.stop)
+			.filter((w) => !Object.entries(planChips).some(([g, c]) => c === w.name && +g !== gw && +g >= w.start && +g <= w.stop))
+			.map((w) => w.name as ChipName);
+	}
+	function setChip(gw: number, chip: ChipName | '') {
+		const next = { ...planChips };
+		const fh = { ...freeHitIds };
+		if (!chip) delete next[gw]; else next[gw] = chip;
+		if (chip === 'freehit') {
+			if (currentTransfers.some((t) => t.gw === gw)) currentTransfers = currentTransfers.filter((t) => t.gw !== gw);
+			fh[gw] = (planEval.weeks.find((w) => w.gw === gw)?.squad ?? baseSquad).map((p) => p.element_id);
+		} else delete fh[gw];
+		planChips = next;
+		freeHitIds = fh;
+	}
+
+	// Load a week-by-week solver plan into the planner.
+	function useMultiPlan(plan: MultiPlan) {
+		const held = new Map(baseSquad.map((p) => [p.element_id, p]));
+		const transfers: PlanTransfer[] = [];
+		const chips: Record<number, ChipName> = {};
+		const fh: Record<number, number[]> = {};
+		for (const w of plan.result.weeks) {
+			const gw = plan.gws[w.t];
+			if (w.chip) chips[gw] = w.chip;
+			if (w.chip === 'freehit') { fh[gw] = [...w.squad]; continue; }
+			for (const t of w.transfers) {
+				const out = held.get(t.out);
+				const inP = asSquadPlayer(t.in);
+				if (!out || !inP) continue;
+				const bought = { ...inP, purchase_price: inP.current_price, selling_price: inP.current_price };
+				transfers.push({ gw, out, in: bought });
+				held.delete(t.out);
+				held.set(t.in, bought);
+			}
+		}
+		currentTransfers = transfers;
+		lineups = {};
+		captains = {};
+		planChips = chips;
+		freeHitIds = fh;
+		viewWeek = 0;
+		clearPreview();
 	}
 
 	function useSolverPlan(transfers: { out: number; in: number }[]) {
@@ -978,7 +1057,7 @@
 		<!-- ═══════════════════════════════════════════════════════════════
 		     PLANNED TRANSFERS STRIP
 		     ═══════════════════════════════════════════════════════════════ -->
-		{#if currentTransfers.length > 0 || Object.keys(lineups).length > 0 || Object.keys(captains).length > 0}
+		{#if currentTransfers.length > 0 || Object.keys(lineups).length > 0 || Object.keys(captains).length > 0 || Object.keys(planChips).length > 0}
 			<section class="transfers-strip">
 				<div class="transfers-strip-header">
 					<div class="flex items-center gap-3 min-w-0">
@@ -1000,11 +1079,16 @@
 					</div>
 				</div>
 				<div class="plan-weeks">
-					{#each planEval.weeks.filter((w) => w.transfersMade || w.manualLineup || w.manualCaptain) as w}
+					{#each planEval.weeks.filter((w) => w.transfersMade || w.manualLineup || w.manualCaptain || w.chip) as w}
 						<div class="plan-week">
 							<button class="plan-week-head" onclick={() => (viewWeek = planGws.indexOf(w.gw))} title="Show this week on the pitch">
 								<span class="gw-tag">GW{w.gw}</span>
+								{#if w.chip}<span class="chip-tag">{CHIP_LABEL[w.chip]}</span>{/if}
 								<span class="plan-week-meta">
+									{#if w.chip === 'freehit'}
+										{@const real = new Set((planEval.weeks[planGws.indexOf(w.gw) - 1]?.squad ?? baseSquad).map((p) => p.element_id))}
+										In for the week: {w.squad.filter((p) => !real.has(p.element_id)).map((p) => p.web_name).join(', ') || 'no changes yet'}
+									{/if}
 									{#if w.transfersMade}
 										{w.transfersMade} transfer{w.transfersMade > 1 ? 's' : ''} ·
 										{w.freeTransfers === Infinity ? 'unlimited' : `${w.freeTransfers} free`}{w.hits ? ` · −${w.hits} hit` : ' · no hit'}
@@ -1096,10 +1180,22 @@
 								{@const w = planEval.weeks[i]}
 								<button class="gw-chip" class:on={i === viewWeek} onclick={() => (viewWeek = i)} title={w?.transfersMade ? `${w.transfersMade} transfer${w.transfersMade > 1 ? 's' : ''}` : ''}>
 									{g}
-									{#if w && (w.transfersMade || w.manualLineup || w.manualCaptain)}<span class="gw-chip-dot" class:lineup={!w.transfersMade}></span>{/if}
+									{#if w && (w.transfersMade || w.manualLineup || w.manualCaptain || w.chip)}<span class="gw-chip-dot" class:lineup={!w.transfersMade && !w.chip} class:chip={!!w.chip}></span>{/if}
 								</button>
 							{/each}
 						</div>
+						{#if !solverPreview && (chipsForWeek(viewGw).length || planChips[viewGw])}
+							<div class="gw-chip-pick">
+								<span>Chip</span>
+								<select value={planChips[viewGw] ?? ''} onchange={(e) => setChip(viewGw, (e.currentTarget as HTMLSelectElement).value as ChipName | '')}>
+									<option value="">None</option>
+									{#each [...new Set([...chipsForWeek(viewGw), ...(planChips[viewGw] ? [planChips[viewGw]] : [])])] as c}
+										<option value={c}>{CHIP_LABEL[c]}</option>
+									{/each}
+								</select>
+								{#if planChips[viewGw] === 'freehit'}<span class="gw-chip-hint">Transfers this week change only the Free Hit squad.</span>{/if}
+							</div>
+						{/if}
 						{#if !solverPreview && wk?.manualLineup}
 							<div class="gw-nav-note">
 								You've picked this week's line-up by hand.
@@ -1447,6 +1543,10 @@
 							{allPlayersLoaded}
 							{previewKey}
 							bind:week={viewWeek}
+							bind:weeks={horizonWeeks}
+							bind:decay
+							chipsAvailable={chipWindows}
+							onUseMultiPlan={useMultiPlan}
 							onPreview={onSolverPreview}
 							onUsePlan={useSolverPlan}
 							onShowPitch={() => document.querySelector('.main-left')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -1476,7 +1576,7 @@
 								{/if}
 							</div>
 
-							{#if item.transfers.length > 0 || item.lineupWeeks.length > 0 || item.captainWeeks.length > 0}
+							{#if item.transfers.length > 0 || item.lineupWeeks.length > 0 || item.captainWeeks.length > 0 || item.chipWeeks.length > 0}
 								<div class="space-y-1 mb-3">
 									{#each item.transfers as t}
 										<div class="flex items-center gap-1.5 text-[10px]">
@@ -1489,6 +1589,11 @@
 									{#each item.lineupWeeks as g}
 										<div class="flex items-center gap-1.5 text-[10px] text-[var(--color-text-2)]">
 											<span class="gw-tag">GW{g}</span> line-up picked by hand
+										</div>
+									{/each}
+									{#each item.chipWeeks as c}
+										<div class="flex items-center gap-1.5 text-[10px] text-[var(--color-accent-light)]">
+											<span class="gw-tag">GW{c.gw}</span> {c.chip}
 										</div>
 									{/each}
 									{#each item.captainWeeks as c}
@@ -1974,6 +2079,11 @@
 		border: 1.5px solid var(--color-surface-2);
 	}
 	.gw-chip-dot.lineup { background: var(--color-accent-light); }
+	.gw-chip-dot.chip { background: var(--color-warning); }
+	.gw-chip-pick { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--color-text-2); flex-wrap: wrap; }
+	.gw-chip-pick select { padding: 4px 8px; border-radius: 6px; background: var(--color-surface-0); border: 1px solid var(--color-surface-4); color: var(--color-text-0); font-size: 12px; }
+	.gw-chip-hint { color: var(--color-text-3); }
+	.chip-tag { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: rgba(245, 158, 11, 0.15); color: var(--color-warning); }
 	.gw-nav-note { margin-top: 8px; font-size: 11px; color: var(--color-text-2); text-align: center; }
 	.gw-nav-note button { color: var(--color-accent-light); font-weight: 600; margin-left: 4px; }
 	.gw-nav-warn { margin-top: 8px; font-size: 11px; color: var(--color-warning); text-align: center; }

@@ -9,6 +9,7 @@
 	} from '$lib/solver/fpl-solver';
 	import type { RunRequest, WorkerMessage, WorkerPlan } from '$lib/solver/solver.worker';
 	import { groupPlans } from '$lib/solver/group-plans';
+	import MultiSolver, { type ChipWindowAvail, type MultiPlan } from './MultiSolver.svelte';
 
 	export interface SolverPreview {
 		squadIds: number[];
@@ -34,15 +35,20 @@
 		onShowPitch?: () => void;
 		/** Gameweek index shown, shared with the pitch */
 		week?: number;
+		chipsAvailable?: ChipWindowAvail[];
+		onUseMultiPlan?: (plan: MultiPlan) => void;
+		/** Weeks ahead and decay, shared with the planner so figures agree */
+		weeks?: number;
+		decay?: number;
 	}
 
-	let { squad, sellingOptions, bank, freeTransfers, allPlayers, allPlayersLoaded, previewKey, onPreview, onUsePlan, onShowPitch, week = $bindable(0) }: Props = $props();
+	let { squad, sellingOptions, bank, freeTransfers, allPlayers, allPlayersLoaded, previewKey, onPreview, onUsePlan, onShowPitch, week = $bindable(0), chipsAvailable = [], onUseMultiPlan, weeks = $bindable(8), decay = $bindable(0.85) }: Props = $props();
+
+	let mode = $state<'now' | 'weeks'>('now');
 
 	// ─── Settings ──────────────────────────────────────────────────────────
 	let maxTransfers = $state(2);
 	let topN = $state(5);
-	let weeks = $state(8);
-	let decay = $state(0.85);
 	let wildcard = $state(false);
 	let showNoGain = $state(false);
 
@@ -368,6 +374,53 @@
 		</div>
 	{/if}
 
+	<div class="sp-modes" role="tablist">
+		<button class="sp-mode" class:on={mode === 'now'} onclick={() => (mode = 'now')} role="tab" aria-selected={mode === 'now'}>
+			<strong>This week</strong><span>Best transfers to make now</span>
+		</button>
+		<button class="sp-mode" class:on={mode === 'weeks'} onclick={() => (mode = 'weeks')} role="tab" aria-selected={mode === 'weeks'}>
+			<strong>Across weeks</strong><span>Week-by-week plan, with chips</span>
+		</button>
+	</div>
+
+	<div class="sp-shared">
+		<label class="sp-field">
+			<span class="sp-label">Weeks ahead</span>
+			<select bind:value={weeks} class="sp-select">
+				{#each [8, 7, 6, 5, 4, 3, 2, 1] as w}
+					<option value={w} disabled={w > gws.length}>{w}{w === 8 ? ' (standard)' : ''}</option>
+				{/each}
+			</select>
+		</label>
+		<label class="sp-field">
+			<span class="sp-label">Decay</span>
+			<select bind:value={decay} class="sp-select">
+				{#each [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7] as d}
+					<option value={d}>{d.toFixed(2)}{d === 0.85 ? ' (standard)' : d === 1 ? ' (none)' : ''}</option>
+				{/each}
+			</select>
+		</label>
+	</div>
+
+	{#if mode === 'weeks'}
+		{#if rules}
+			<MultiSolver
+				players={solverPlayers}
+				{squadIds}
+				{bank}
+				{freeTransfers}
+				{weights}
+				gws={horizon}
+				{rules}
+				{chipsAvailable}
+				{baseTwxp}
+				{name}
+				canRun={!!rules && allPlayersLoaded && unconfirmed.length === 0}
+				blocked={unconfirmed.length ? 'Confirm the selling price above to run.' : !allPlayersLoaded ? 'Loading players…' : ''}
+				onUsePlan={(p) => onUseMultiPlan?.(p)}
+			/>
+		{/if}
+	{:else}
 	<div class="sp-card sp-controls">
 		<div class="sp-field">
 			<span class="sp-label">Transfers</span>
@@ -385,22 +438,6 @@
 					<option value={5}>Top 5</option>
 					<option value={10}>Top 10</option>
 					<option value={20}>Top 20</option>
-				</select>
-			</label>
-			<label class="sp-field">
-				<span class="sp-label">Weeks ahead</span>
-				<select bind:value={weeks} class="sp-select">
-					{#each [8, 7, 6, 5, 4, 3, 2, 1] as w}
-						<option value={w} disabled={w > gws.length}>{w}{w === 8 ? ' (standard)' : ''}</option>
-					{/each}
-				</select>
-			</label>
-			<label class="sp-field">
-				<span class="sp-label">Decay</span>
-				<select bind:value={decay} class="sp-select">
-					{#each [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7] as d}
-						<option value={d}>{d.toFixed(2)}{d === 0.85 ? ' (standard)' : d === 1 ? ' (none)' : ''}</option>
-					{/each}
 				</select>
 			</label>
 		</div>
@@ -496,6 +533,7 @@
 			{/if}
 		</div>
 	{/if}
+	{/if}
 </div>
 
 <style>
@@ -548,7 +586,19 @@
 	}
 	.sp-seg-btn:hover { color: var(--color-text-0); }
 	.sp-seg-btn.on { background: var(--color-accent); color: #fff; }
-	.sp-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+	.sp-grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 8px; }
+	.sp-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+	.sp-mode {
+		display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+		padding: 9px 12px; border-radius: 10px; text-align: left;
+		background: var(--color-surface-2); border: 1px solid var(--color-surface-4);
+		transition: border-color 0.12s, background 0.12s;
+	}
+	.sp-mode strong { font-size: 13px; color: var(--color-text-0); }
+	.sp-mode span { font-size: 11px; color: var(--color-text-2); }
+	.sp-mode:hover { background: var(--color-surface-3); }
+	.sp-mode.on { border-color: var(--color-accent); background: var(--color-accent-glow); }
+	.sp-shared { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 	.sp-select {
 		width: 100%;
 		padding: 7px 8px;

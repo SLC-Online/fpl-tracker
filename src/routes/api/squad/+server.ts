@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { getEntry, getEventPicks, getTransfers, getHistory, calculateSellingPrice, getLivePrices } from '$lib/server/fpl-api';
+import { getEntry, getEventPicks, getTransfers, getHistory, calculateSellingPrice, getLivePrices, getChipWindows } from '$lib/server/fpl-api';
 import { supabaseAdmin } from '$lib/supabase-server';
 import { getPriceHistory } from '$lib/server/price-history';
 import { replayPurchasePrices } from '$lib/purchase-prices';
@@ -235,6 +235,18 @@ export const GET: RequestHandler = async ({ url }) => {
 			freeTransfers = 1;
 		}
 
+		// Chips still available: each window FPL offers, unless already played in it.
+		let chipsAvailable: { name: string; start: number; stop: number }[] = [];
+		try {
+			const windows = (await getChipWindows()) ?? [];
+			chipsAvailable = windows
+				.filter((w) => w.stop_event >= nextGw)
+				.filter((w) => !chips.some((c: any) => c.name === w.name && c.event >= w.start_event && c.event <= w.stop_event))
+				.map((w) => ({ name: w.name, start: Math.max(w.start_event, nextGw), stop: w.stop_event }));
+		} catch {
+			chipsAvailable = [];
+		}
+
 		return json({
 			manager: {
 				id: entry.id,
@@ -252,6 +264,8 @@ export const GET: RequestHandler = async ({ url }) => {
 			free_transfers: freeTransfers,
 			active_chip: shownPicks.active_chip,
 			// Purchase prices rebuilt and checked against FPL's own figures.
+			chips_available: chipsAvailable,
+			chips_used: chips.map((c: any) => ({ name: c.name, event: c.event })),
 			prices_verified: pricesVerified,
 			price_problems: priceProblems,
 		});

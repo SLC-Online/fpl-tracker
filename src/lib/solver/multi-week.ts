@@ -33,6 +33,12 @@ export interface MultiRequest {
 	weights: number[];
 	rules: FplRules;
 	chips?: Partial<Record<ChipName, ChipSpec>>;
+	/**
+	 * A fixed chip schedule (week index -> chip) instead of `chips`. Solving
+	 * one fixed schedule per option, in parallel, is far faster than letting
+	 * one model choose, and gives a like-for-like comparison of the options.
+	 */
+	schedule?: Record<number, ChipName>;
 	maxTransfersPerWeek?: number;       // optional cap to keep plans sensible
 	timeLimitSeconds?: number;
 	/** Squad-week sets to rule out (for next-best alternatives): each entry is the full plan's buys. */
@@ -69,7 +75,10 @@ export function buildMultiModel(req: MultiRequest) {
 	const owned = new Set(req.squadIds);
 	const pool = req.players.filter((p) => owned.has(p.id) || p.hasProj);
 	const chips = req.chips ?? {};
-	const chipWeeks = (c: ChipName) => new Set(chips[c]?.weeks ?? []);
+	const sched = req.schedule;
+	const chipWeeks = (c: ChipName) => sched
+		? new Set(Object.entries(sched).filter(([, n]) => n === c).map(([t]) => +t))
+		: new Set(chips[c]?.weeks ?? []);
 	const WC = chipWeeks('wildcard'), FH = chipWeeks('freehit'), BB = chipWeeks('bboost'), TC = chipWeeks('3xc');
 	const maxFt = rules.maxBankedFreeTransfers;
 	const squadN = rules.squadSize;
@@ -202,8 +211,14 @@ export function buildMultiModel(req: MultiRequest) {
 		for (const c of cw) binaries.push(c);
 		if (cw.length > 1) row(`${cw.join(' + ')} <= 1`);
 	}
+	// A fixed schedule: those chips are played in those weeks.
+	if (sched) {
+		const tag: Record<ChipName, string> = { wildcard: 'wc', freehit: 'fh', bboost: 'bb', '3xc': 'tc' };
+		for (const [t, n] of Object.entries(sched)) row(`${tag[n]}_${t} = 1`);
+	}
 	// Each chip at most once (exactly once if it must be used)
 	for (const [name, tag] of [['wildcard', 'wc'], ['freehit', 'fh'], ['bboost', 'bb'], ['3xc', 'tc']] as const) {
+		if (sched) break;
 		const spec = chips[name];
 		if (!spec || !spec.weeks.length) continue;
 		row(`${spec.weeks.map((t) => `${tag}_${t}`).join(' + ')} ${spec.mustUse ? '=' : '<='} 1`);
@@ -233,7 +248,7 @@ export function buildMultiModel(req: MultiRequest) {
 	return { lp, variables: binaries.length + generals.length + T + 1, constraints: r, pool };
 }
 
-export function solveMultiWeek(highs: HighsLike, req: MultiRequest): MultiResult {
+export function solveMultiWeek(highs: HighsLike, req: MultiRequest, extraOptions: Record<string, unknown> = {}): MultiResult {
 	const t0 = performance.now();
 	const { lp, variables, constraints, pool } = buildMultiModel(req);
 	const t1 = performance.now();
@@ -241,7 +256,8 @@ export function solveMultiWeek(highs: HighsLike, req: MultiRequest): MultiResult
 		output_flag: false,
 		mip_rel_gap: 0,
 		mip_abs_gap: 1e-9,
-		...(req.timeLimitSeconds ? { time_limit: req.timeLimitSeconds } : {})
+		...(req.timeLimitSeconds ? { time_limit: req.timeLimitSeconds } : {}),
+		...extraOptions
 	});
 	const t2 = performance.now();
 	const T = req.weights.length;

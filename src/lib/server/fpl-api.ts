@@ -128,8 +128,17 @@ export type LivePrice = { now_cost: number; cost_change_start: number };
 // which made affordable transfers look unaffordable. Anything that checks
 // affordability should use these.
 const LIVE_TTL_MS = 2 * 60 * 1000;
-let liveCache: { at: number; prices: Map<number, LivePrice> } | null = null;
+let liveCache: { at: number; prices: Map<number, LivePrice>; chips: ChipWindow[] } | null = null;
+
+/** A chip FPL lets you play between two gameweeks (each chip has one window per half-season). */
+export type ChipWindow = { name: string; start_event: number; stop_event: number };
 let liveInFlight: Promise<Map<number, LivePrice> | null> | null = null;
+
+/** FPL's chip windows (from the same cached bootstrap fetch as live prices). */
+export async function getChipWindows(): Promise<ChipWindow[] | null> {
+	await getLivePrices();
+	return liveCache?.chips ?? null;
+}
 
 /** Current prices straight from FPL, or null if FPL can't be reached (callers fall back). */
 export async function getLivePrices(): Promise<Map<number, LivePrice> | null> {
@@ -147,7 +156,8 @@ export async function getLivePrices(): Promise<Map<number, LivePrice> | null> {
 			for (const e of data.elements ?? []) {
 				prices.set(e.id, { now_cost: e.now_cost, cost_change_start: e.cost_change_start });
 			}
-			liveCache = { at: Date.now(), prices };
+			const chips: ChipWindow[] = (data.chips ?? []).map((c: any) => ({ name: c.name, start_event: c.start_event, stop_event: c.stop_event }));
+			liveCache = { at: Date.now(), prices, chips };
 			return prices;
 		} catch (err) {
 			console.error('live prices unavailable, using snapshot prices:', err);
