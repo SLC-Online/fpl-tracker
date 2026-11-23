@@ -3,6 +3,8 @@
  * Input-source agnostic: works with whatever projections are in the system.
  */
 
+import { bestXiPoints } from './solver/fpl-solver';
+
 export const DECAY = 0.85;
 export const BCV_THRESHOLD = 0.10;  // Minimum BCV gain to justify a transfer
 
@@ -33,33 +35,26 @@ export interface TransferOption {
 
 /**
  * Calculate Time-Weighted Expected Points for a squad.
- * For each GW, picks the optimal 11 (respecting position constraints).
+ * For each GW: the best legal XI, with the top starter captained (double
+ * points), weighted by DECAY per week. Uses the solver's own scoring
+ * (bestXiPoints) so the page and the optimiser always agree.
  */
-export function calculateSquadTWxP(squad: SquadPlayer[]): number {
+export function calculateSquadTWxP(squad: SquadPlayer[], gwList?: number[]): number {
 	if (!squad || squad.length === 0) return 0;
 
-	// Get all GWs
-	const allGws = new Set<number>();
-	for (const p of squad) {
-		for (const proj of p.projections || []) {
-			allGws.add(proj.gw);
-		}
+	let gws = gwList;
+	if (!gws) {
+		const allGws = new Set<number>();
+		for (const p of squad) for (const proj of p.projections || []) allGws.add(proj.gw);
+		gws = [...allGws].sort((a, b) => a - b).slice(0, 8);
 	}
-	const gws = [...allGws].sort((a, b) => a - b).slice(0, 8);
 
+	const players = squad.map((p) => {
+		const byGw = new Map((p.projections || []).map((pr) => [pr.gw, pr.pts]));
+		return { pos: p.element_type, proj: gws!.map((g) => byGw.get(g) ?? 0) };
+	});
 	let total = 0;
-	for (let i = 0; i < gws.length; i++) {
-		const gw = gws[i];
-		const playerPts = squad.map(p => ({
-			element_id: p.element_id,
-			element_type: p.element_type,
-			pts: (p.projections || []).find(pr => pr.gw === gw)?.pts || 0,
-		}));
-
-		const best11 = pickOptimal11(playerPts);
-		const gwTotal = best11.reduce((s, p) => s + p.pts, 0);
-		total += gwTotal * Math.pow(DECAY, i);
-	}
+	for (let i = 0; i < gws.length; i++) total += bestXiPoints(players as any, i) * Math.pow(DECAY, i);
 	return total;
 }
 
@@ -70,35 +65,6 @@ export function calculatePlayerTWxP(projections: { gw: number; pts: number }[]):
 	if (!projections || projections.length === 0) return 0;
 	const sorted = [...projections].sort((a, b) => a.gw - b.gw);
 	return sorted.reduce((sum, p, i) => sum + p.pts * Math.pow(DECAY, i), 0);
-}
-
-/**
- * Pick optimal 11 from 15 players respecting FPL position constraints.
- * 1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD, total = 11
- */
-function pickOptimal11(players: { element_id: number; element_type: number; pts: number }[]) {
-	const gk = players.filter(p => p.element_type === 1).sort((a, b) => b.pts - a.pts);
-	const def = players.filter(p => p.element_type === 2).sort((a, b) => b.pts - a.pts);
-	const mid = players.filter(p => p.element_type === 3).sort((a, b) => b.pts - a.pts);
-	const fwd = players.filter(p => p.element_type === 4).sort((a, b) => b.pts - a.pts);
-
-	// Minimum: 1 GK, 3 DEF, 2 MID, 1 FWD = 7
-	const team = [
-		...gk.slice(0, 1),
-		...def.slice(0, 3),
-		...mid.slice(0, 2),
-		...fwd.slice(0, 1),
-	];
-
-	// Fill remaining 4 from best available (respecting maxes)
-	const remaining = [
-		...def.slice(3, 5),
-		...mid.slice(2, 5),
-		...fwd.slice(1, 3),
-	].sort((a, b) => b.pts - a.pts);
-
-	team.push(...remaining.slice(0, 4));
-	return team.slice(0, 11);
 }
 
 /**
