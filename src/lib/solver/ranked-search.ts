@@ -30,6 +30,11 @@ export interface RankedRequest {
 	 * Moves that pay for another move are kept: undoing them isn't affordable.
 	 */
 	hideNoGain?: boolean;
+	/**
+	 * Count plans that tie exactly and differ only in who comes in for one
+	 * player as one entry: later ones are attached to the first as `alts`.
+	 */
+	groupTies?: boolean;
 	/** Called as each transfer count finishes, so results can show as they come. */
 	onDepth?: (depth: number, plans: RankedPlan[]) => void;
 }
@@ -43,6 +48,9 @@ export interface RankedPlan {
 	net: number;
 	/** brute-force enumeration order, for breaking exact ties the same way */
 	seq?: number;
+	/** groupTies: the incoming player that varies, and the others giving the same score */
+	slotIn?: number;
+	alts?: number[];
 }
 
 export interface RankedResult {
@@ -112,6 +120,21 @@ export function rankedSearch(req: RankedRequest): RankedResult {
 			const key = (p: RankedPlan) => p.transfers.map((t) => t.in).sort((a, b) => a - b).join(',') + '|' + String(Number(p.net.toFixed(2)));
 			const k0 = key(plan);
 			const dup = best.findIndex((b) => key(b) === k0);
+			if (req.groupTies) {
+				const outsKey = (x: RankedPlan) => x.transfers.map((t) => t.out).sort((a, b) => a - b).join(',');
+				const ins = new Set(plan.transfers.map((t) => t.in));
+				for (const g of best) {
+					if (Math.abs(g.net - plan.net) > 1e-9 || outsKey(g) !== outsKey(plan)) continue;
+					const gIns = new Set(g.transfers.map((t) => t.in));
+					const onlyP = [...ins].filter((x) => !gIns.has(x));
+					const onlyG = [...gIns].filter((x) => !ins.has(x));
+					if (onlyP.length !== 1 || onlyG.length !== 1) continue;
+					if (g.slotIn !== undefined && g.slotIn !== onlyG[0]) continue;
+					g.slotIn = onlyG[0];
+					(g.alts ??= []).push(onlyP[0]);
+					return;
+				}
+			}
 			const before = (a: RankedPlan, b: RankedPlan) => a.net > b.net || (a.net === b.net && (a.delta > b.delta || (a.delta === b.delta && a.seq! < b.seq!)));
 			if (dup >= 0) { if (plan.net > best[dup].net || (plan.net === best[dup].net && plan.seq! < best[dup].seq!)) best.splice(dup, 1); else return; }
 			// Same order as the brute force: net, then delta (insertion order on ties).

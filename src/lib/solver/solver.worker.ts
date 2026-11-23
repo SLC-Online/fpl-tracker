@@ -115,6 +115,9 @@ self.onmessage = async (ev: MessageEvent<RunRequest>) => {
 			rankedSearch({
 				players, squadIds: req.squadIds, bank: req.bank, freeTransfers: req.freeTransfers,
 				weights: req.weights, rules: req.rules, maxTransfers: ranked, topN: req.topN,
+				// With no-gain plans shown, equal-score swaps of one player join
+				// one row instead of filling the list.
+				groupTies: !req.hideNoGain,
 				hideNoGain: req.hideNoGain,
 				onDepth: (depth, plans) => {
 					post({ type: 'depth', depth, plans: plans.map((p) => ({ ...p, proven: true })), ms: performance.now() - tDepth });

@@ -963,7 +963,10 @@
 							<span class="preview-kicker">Solver preview · GW{previewGw}</span>
 							<span class="preview-title">{solverPreview.label}</span>
 						</div>
-						<button class="preview-back" onclick={clearPreview}>Back to my team</button>
+						<div class="preview-actions">
+							<button class="preview-plans" onclick={() => document.querySelector('.sp-row.is-previewed')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Back to plans</button>
+							<button class="preview-back" onclick={clearPreview}>Back to my team</button>
+						</div>
 					</div>
 				{/if}
 				{#if viewMode === 'pitch'}
@@ -1283,6 +1286,7 @@
 							{previewKey}
 							onPreview={onSolverPreview}
 							onUsePlan={useSolverPlan}
+							onShowPitch={() => document.querySelector('.main-left')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
 						/>
 					</div>
 				{/if}
@@ -1719,6 +1723,7 @@
 	.main-left {
 		flex: 1;
 		min-width: 0;
+		scroll-margin-top: 76px; /* clear the sticky site header when jumped to */
 	}
 
 	@media (min-width: 1024px) {
@@ -1777,6 +1782,9 @@
 		font-weight: 600;
 	}
 	.preview-back:hover { background: var(--color-accent-light); }
+	.preview-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+	.preview-plans { display: none; font-size: 12px; font-weight: 600; color: var(--color-accent-light); padding: 6px 4px; }
+	@media (max-width: 1023px) { .preview-plans { display: inline-block; } }
 	.view-toggle-bar {
 		display: flex;
 		align-items: center;

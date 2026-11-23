@@ -13,3 +13,11 @@ for (const hide of [false, true]) {
 	console.log(`\nhideNoGain=${hide} (${((performance.now() - t) / 1000).toFixed(1)}s)`);
 	for (const d of [1, 2, 3]) { console.log(` depth ${d}: ${r.byDepth[d].length} plans`); r.byDepth[d].slice(0, 4).forEach((p) => console.log(`   ${p.net.toFixed(2)} (squad ${p.twxp.toFixed(2)})  ${p.transfers.map((t) => by.get(t.out) + '→' + by.get(t.in)).join(', ')}`)); }
 }
+
+// Grouping of equal-score swaps inside the search: top 5 rows at depth 3.
+for (const n of [5, 20]) {
+	const t = performance.now();
+	const g = rankedSearch({ ...base, topN: n, groupTies: true }).byDepth[3];
+	console.log(`\ngroupTies top ${n}: ${((performance.now() - t) / 1000).toFixed(1)}s, ${g.length} rows`);
+	for (const p of g.slice(0, 6)) console.log(`  ${p.net.toFixed(2)}  ${p.transfers.map((t) => by.get(t.out) + '→' + by.get(t.in)).join(', ')}${p.alts ? `  [or ${p.alts.length} others for ${by.get(p.slotIn)}]` : ''}`);
+}

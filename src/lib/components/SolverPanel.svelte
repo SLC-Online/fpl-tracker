@@ -8,6 +8,7 @@
 		type FplRules, type SolverPlayer
 	} from '$lib/solver/fpl-solver';
 	import type { RunRequest, WorkerMessage, WorkerPlan } from '$lib/solver/solver.worker';
+	import { groupPlans } from '$lib/solver/group-plans';
 
 	export interface SolverPreview {
 		squadIds: number[];
@@ -29,9 +30,11 @@
 		previewKey: string | null;
 		onPreview: (key: string | null, preview: SolverPreview | null) => void;
 		onUsePlan: (transfers: { out: number; in: number }[]) => void;
+		/** Small screens: the pitch is above the panel, so offer a jump to it. */
+		onShowPitch?: () => void;
 	}
 
-	let { squad, sellingOptions, bank, freeTransfers, allPlayers, allPlayersLoaded, previewKey, onPreview, onUsePlan }: Props = $props();
+	let { squad, sellingOptions, bank, freeTransfers, allPlayers, allPlayersLoaded, previewKey, onPreview, onUsePlan, onShowPitch }: Props = $props();
 
 	// ─── Settings ──────────────────────────────────────────────────────────
 	let maxTransfers = $state(2);
@@ -279,6 +282,12 @@
 					</span>
 				{/each}
 			</div>
+			{#if onShowPitch}
+				<button class="sp-show-pitch" onclick={onShowPitch}>
+					<svg viewBox="0 0 16 16" width="12" height="12" fill="none"><path d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+					See it on the pitch
+				</button>
+			{/if}
 			{#if canUse}
 				<div class="sp-actions">
 					<button class="sp-use" onclick={() => onUsePlan(transfers)}>Use these transfers</button>
@@ -289,7 +298,7 @@
 	{/if}
 {/snippet}
 
-{#snippet planRow(plan: WorkerPlan, tag: string, rank: number, label: string)}
+{#snippet planRow(plan: WorkerPlan, tag: string, rank: number, label: string, slotIn: number | null = null, alts: number[] = [])}
 	{@const key = planKey(plan, tag)}
 	{@const open = expanded === key}
 	<div class="sp-row" class:is-open={open} class:is-previewed={previewKey === key}>
@@ -302,6 +311,9 @@
 						<span class="sp-out">{name(t.out)}</span>
 						<svg class="sp-arrow" viewBox="0 0 16 16" width="12" height="12" fill="none"><path d="M3 8h10M10 5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
 						<span class="sp-in">{name(t.in)}</span>
+						{#if t.in === slotIn && alts.length}
+							<span class="sp-or">or {alts.length} other{alts.length > 1 ? 's' : ''}</span>
+						{/if}
 					</span>
 				{/each}
 			</span>
@@ -315,6 +327,12 @@
 			<p class="sp-unproven">Stopped at the time limit: best found, not proven best.</p>
 		{/if}
 		{#if open}
+			{#if slotIn !== null && alts.length}
+				<p class="sp-alts">
+					Same score with any of these instead of {name(slotIn)}, as none of them changes the line-up:
+					{alts.slice(0, 8).map(name).join(', ')}{alts.length > 8 ? ` and ${alts.length - 8} more` : ''}.
+				</p>
+			{/if}
 			{@render lineup(plan.squadIds, key, plan.transfers, label, plan.transfers.length > 0 && tag !== 'wc')}
 		{/if}
 	</div>
@@ -444,8 +462,8 @@
 							{#if showNoGain}No legal {sec.depth}-transfer plan.{:else}No {sec.depth}-transfer plan where every transfer adds points. Tick “Show plans with a transfer that adds nothing” to see them anyway.{/if}
 						</p>
 					{:else}
-						{#each sec.plans as plan, i}
-							{@render planRow(plan, `d${sec.depth}`, i + 1, `${sec.depth} transfer${sec.depth > 1 ? 's' : ''} · option ${i + 1}`)}
+						{#each (sec.plans.some((p) => p.alts) ? sec.plans.map((p) => ({ plan: p, slotIn: p.slotIn ?? null, alts: p.alts ?? [] })) : groupPlans(sec.plans)) as g, i}
+							{@render planRow(g.plan, `d${sec.depth}`, i + 1, `${sec.depth} transfer${sec.depth > 1 ? 's' : ''} · option ${i + 1}`, g.slotIn, g.alts)}
 						{/each}
 					{/if}
 				</section>
@@ -672,6 +690,27 @@
 	}
 	.sp-use:hover { background: rgba(99, 102, 241, 0.25); }
 	.sp-actions-note { font-size: 11px; color: var(--color-text-2); line-height: 1.35; }
+	.sp-or {
+		font-size: 10px;
+		color: var(--color-text-2);
+		padding: 1px 6px;
+		border-radius: 999px;
+		background: var(--color-surface-3);
+		white-space: nowrap;
+	}
+	.sp-alts { font-size: 11px; color: var(--color-text-2); line-height: 1.45; padding: 8px 12px 0; border-top: 1px solid var(--color-surface-4); }
+	.sp-show-pitch {
+		display: none;
+		align-items: center;
+		gap: 6px;
+		margin-top: 10px;
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--color-accent-light);
+	}
+	@media (max-width: 1023px) {
+		.sp-show-pitch { display: inline-flex; }
+	}
 	.sp-pending { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-2); padding: 8px 4px; }
 	.sp-foot { font-size: 11px; color: var(--color-text-2); line-height: 1.5; padding: 0 2px; }
 </style>
