@@ -418,6 +418,7 @@
 				canRun={!!rules && allPlayersLoaded && unconfirmed.length === 0}
 				blocked={unconfirmed.length ? 'Confirm the selling price above to run.' : !allPlayersLoaded ? 'Loading players…' : ''}
 				onUsePlan={(p) => onUseMultiPlan?.(p)}
+				speedFactor={msPerSquad !== null ? Math.max(0.5, msPerSquad / REF_MS_PER_SQUAD) : 1}
 			/>
 		{/if}
 	{:else}

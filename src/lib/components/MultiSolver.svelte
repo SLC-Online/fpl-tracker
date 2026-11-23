@@ -23,12 +23,14 @@
 		canRun: boolean;
 		blocked: string;             // why it can't run, if it can't
 		onUsePlan: (plan: MultiPlan) => void;
+		/** This device's speed relative to the reference machine (1 = same, 2 = half as fast) */
+		speedFactor?: number;
 	}
-	let { players, squadIds, bank, freeTransfers, weights, gws, rules, chipsAvailable, baseTwxp, name, canRun, blocked, onUsePlan }: Props = $props();
+	let { players, squadIds, bank, freeTransfers, weights, gws, rules, chipsAvailable, baseTwxp, name, canRun, blocked, onUsePlan, speedFactor = 1 }: Props = $props();
 
 	// ─── Settings ──────────────────────────────────────────────────────────
 	let maxPerWeek = $state<number | null>(null);
-	let minutes = $state(3);
+	let minutes = $state(5);   // 8-week plans with a chip take up to ~4 min to prove
 	// One choice per chip window in the horizon: off, solver picks, a week, or a range.
 	type Choice = { mode: 'off' | 'auto' | 'week' | 'range'; week: number; from: number; to: number };
 	let windows = $derived(
@@ -75,10 +77,19 @@
 	const memory = typeof navigator !== 'undefined' ? (navigator as any).deviceMemory ?? 8 : 8;
 	let poolSize = $derived(Math.max(1, Math.min(cores - 1, memory <= 4 ? 2 : 6, schedules.length)));
 
-	// Measured in headless Chrome on an M-series Mac with live data: an
-	// 8-week plan takes about 150 s on one core; roughly weeks^3.6.
-	let perPlanSeconds = $derived(150 * Math.pow(gws.length / 8, 3.6));
-	let estimateSeconds = $derived(Math.ceil(schedules.length / poolSize) * Math.min(perPlanSeconds, minutes * 60));
+	// Measured on an M-series Mac with live data: an 8-week plan without
+	// chips takes about 150 s on one core (roughly weeks^3.6); one with a chip
+	// about 1.6 times that (4 weeks: 11 s without, 25-49 s with). Scaled by
+	// this device's measured speed, capped by the time allowed per plan.
+	const perPlan = (s: Record<number, ChipName>) =>
+		Math.min(minutes * 60, 150 * Math.pow(gws.length / 8, 3.6) * (Object.keys(s).length ? 1.6 : 1) * speedFactor);
+	let estimateSeconds = $derived.by(() => {
+		// Longest plans first across the pool: a simple upper estimate.
+		const times = schedules.map(perPlan).sort((a, b) => b - a);
+		const lanes = new Array(poolSize).fill(0);
+		for (const t of times) { lanes.sort((a, b) => a - b); lanes[0] += t; }
+		return Math.max(...lanes, 0);
+	});
 
 	const label = (s: Record<number, ChipName>) => {
 		const parts = Object.entries(s).sort((a, b) => +a[0] - +b[0]).map(([t, n]) => `${CHIP_LABEL[n]} GW${gws[+t]}`);
