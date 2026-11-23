@@ -24,6 +24,14 @@ export interface RankedRequest {
 	rules: FplRules;
 	maxTransfers: number;
 	topN: number;
+	/**
+	 * Leave out plans with a transfer that adds nothing: undoing it is legal
+	 * (affordable, club limit) and the squad scores the same or better.
+	 * Moves that pay for another move are kept: undoing them isn't affordable.
+	 */
+	hideNoGain?: boolean;
+	/** Called as each transfer count finishes, so results can show as they come. */
+	onDepth?: (depth: number, plans: RankedPlan[]) => void;
 }
 
 export interface RankedPlan {
@@ -174,6 +182,7 @@ export function rankedSearch(req: RankedRequest): RankedResult {
 					const twxp = squadTwxp(kept.concat(chosen), weights);
 					const net = twxp - base - hits;
 					if (net < threshold()) return;
+					if (req.hideNoGain && hasNoGainTransfer(kept, outs, chosen, twxp, budget, spent, weights, rules.clubLimit)) return;
 					const ins = [...chosen];
 					// Pair outs and ins by position for display (same position, in order).
 					const left = [...ins];
@@ -210,6 +219,29 @@ export function rankedSearch(req: RankedRequest): RankedResult {
 			searchOne(outs, false);
 		}
 		byDepth.push(best);
+		req.onDepth?.(depth, best);
 	}
 	return { baseTwxp: base, byDepth, stats: { leaves, bounds, ms: performance.now() - t0 } };
+}
+
+/**
+ * True if some transfer in the plan can be undone (sell the incoming player,
+ * keep the outgoing one) legally without lowering the squad's score.
+ */
+export function hasNoGainTransfer(
+	kept: SolverPlayer[], outs: SolverPlayer[], ins: SolverPlayer[], twxp: number,
+	budget: number, spent: number, weights: number[], clubLimit: number
+): boolean {
+	for (const o of outs) {
+		const sellO = o.sell ?? o.cost;
+		for (const i of ins) {
+			if (i.pos !== o.pos) continue;
+			// Undo o -> i: o's sale no longer funds anything, i isn't bought.
+			if (spent - i.cost > budget - sellO) continue;
+			const sub = kept.concat(ins.filter((x) => x !== i), [o]);
+			if (o.team !== i.team && sub.filter((x) => x.team === o.team).length > clubLimit) continue;
+			if (squadTwxp(sub, weights) >= twxp - 1e-9) return true;
+		}
+	}
+	return false;
 }

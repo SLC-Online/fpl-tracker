@@ -11,9 +11,24 @@
 		DECAY, type SquadPlayer, type TransferOption
 	} from '$lib/transfer-engine';
 	import PitchView from '$lib/components/PitchView.svelte';
+	import SolverPanel, { type SolverPreview } from '$lib/components/SolverPanel.svelte';
 
 	// --- View mode ---
 	let viewMode: 'pitch' | 'list' = $state('pitch');
+	let rightMode: 'data' | 'solver' = $state('data');
+
+	// --- Solver preview on the pitch ---
+	let previewKey = $state<string | null>(null);
+	let solverPreview = $state<SolverPreview | null>(null);
+	function onSolverPreview(key: string | null, p: SolverPreview | null) {
+		previewKey = key;
+		solverPreview = p;
+		if (p) viewMode = 'pitch';
+	}
+	function clearPreview() {
+		previewKey = null;
+		solverPreview = null;
+	}
 
 	// --- Squad loader state ---
 	let managerId = $state('');
@@ -606,6 +621,36 @@
 	});
 
 	// Position color helper
+	// --- Solver integration ---
+	let sellingOptions = $derived(new Map<number, number[]>(
+		(squadData?.squad || []).filter((p: any) => p.selling_options).map((p: any) => [p.element_id, p.selling_options])
+	));
+	function asSquadPlayer(id: number): SquadPlayer | null {
+		const own = baseSquad.find((p) => p.element_id === id);
+		if (own) return own;
+		const p = allPlayers.find((x) => x.element_id === id);
+		if (!p) return null;
+		return {
+			element_id: p.element_id, web_name: p.web_name, element_type: p.element_type,
+			team_code: p.team_code, team_short: p.team_short,
+			current_price: p.now_cost, purchase_price: p.now_cost, selling_price: p.now_cost,
+			projections: p.projections || [], bcv: p.bcv,
+		};
+	}
+	let previewStarting = $derived((solverPreview?.starters ?? []).map(asSquadPlayer).filter(Boolean) as SquadPlayer[]);
+	let previewBench = $derived((solverPreview?.bench ?? []).map(asSquadPlayer).filter(Boolean) as SquadPlayer[]);
+	let previewGw = $derived.by(() => {
+		const s = new Set<number>();
+		for (const p of allPlayers) for (const pr of p.projections ?? []) s.add(pr.gw);
+		return [...s].sort((a, b) => a - b)[solverPreview?.week ?? 0];
+	});
+	function useSolverPlan(transfers: { out: number; in: number }[]) {
+		const pairs = transfers.map((t) => ({ out: asSquadPlayer(t.out)!, in: asSquadPlayer(t.in)! })).filter((t) => t.out && t.in);
+		currentTransfers = pairs;
+		manualSquadOrder = [];
+		clearPreview();
+	}
+
 	function positionBg(elementType: number): string {
 		const colors: Record<number, string> = {
 			1: 'bg-amber-500/15 text-amber-400',
@@ -891,7 +936,8 @@
 		<!-- ═══════════════════════════════════════════════════════════════
 		     MAIN SPLIT LAYOUT: Pitch (left) + Panel (right)
 		     ═══════════════════════════════════════════════════════════════ -->
-		<!-- View toggle (above split for alignment) -->
+		<div class="main-split">
+			<div class="main-left">
 				<div class="view-toggle-bar">
 					<div class="view-toggle-pills">
 						<button
@@ -911,14 +957,23 @@
 					{/if}
 				</div>
 
-		<div class="main-split">
-			<div class="main-left">
+				{#if solverPreview}
+					<div class="preview-banner" role="status">
+						<div class="min-w-0">
+							<span class="preview-kicker">Solver preview · GW{previewGw}</span>
+							<span class="preview-title">{solverPreview.label}</span>
+						</div>
+						<button class="preview-back" onclick={clearPreview}>Back to my team</button>
+					</div>
+				{/if}
 				{#if viewMode === 'pitch'}
 					<PitchView
-						starting={starting11}
-						{bench}
-						onPlayerClick={onPitchPlayerClick}
-						selectedId={selectedPlayer?.element_id}
+						starting={solverPreview ? previewStarting : starting11}
+						bench={solverPreview ? previewBench : bench}
+						onPlayerClick={solverPreview ? undefined : onPitchPlayerClick}
+						selectedId={solverPreview ? null : selectedPlayer?.element_id}
+						captainId={solverPreview?.captain ?? null}
+						newIds={solverPreview ? solverPreview.transfers.map((t) => t.in) : []}
 					/>
 				{:else}
 					<!-- LIST VIEW -->
@@ -1022,7 +1077,13 @@
 
 			<!-- RIGHT: Player Browser (always visible) -->
 			<aside class="main-right">
-				<div class="panel-sticky">
+				<div class="view-toggle-bar">
+					<div class="view-toggle-pills">
+						<button onclick={() => rightMode = 'data'} class="view-pill {rightMode === 'data' ? 'view-pill--active' : ''}">Data</button>
+						<button onclick={() => rightMode = 'solver'} class="view-pill {rightMode === 'solver' ? 'view-pill--active' : ''}">Solver</button>
+					</div>
+				</div>
+				<div class="panel-sticky" class:hidden={rightMode !== 'data'}>
 					<!-- Selected player banner (compact, only when player clicked) -->
 					{#if transferOutPlayer}
 						<div class="panel-card" style="padding: 8px 12px;">
@@ -1210,6 +1271,21 @@
 						</table>
 					</div>
 				</div>
+				{#if rightMode === 'solver'}
+					<div class="solver-pane">
+						<SolverPanel
+							squad={baseSquad}
+							{sellingOptions}
+							bank={baseBank}
+							freeTransfers={effectiveFreeTransfers}
+							{allPlayers}
+							{allPlayersLoaded}
+							{previewKey}
+							onPreview={onSolverPreview}
+							onUsePlan={useSolverPlan}
+						/>
+					</div>
+				{/if}
 			</aside>
 		</div>
 
@@ -1675,6 +1751,32 @@
 	/* ═══════════════════════════════════════════════════════════
 	   VIEW TOGGLE
 	   ═══════════════════════════════════════════════════════════ */
+	.hidden { display: none !important; }
+	.solver-pane { display: flex; flex-direction: column; }
+	.preview-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		max-width: 520px;
+		margin: 0 auto 10px;
+		padding: 9px 12px;
+		border-radius: 10px;
+		background: var(--color-accent-glow);
+		border: 1px solid rgba(129, 140, 248, 0.45);
+	}
+	.preview-kicker { display: block; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent-light); }
+	.preview-title { display: block; font-size: 13px; font-weight: 600; color: var(--color-text-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.preview-back {
+		flex-shrink: 0;
+		padding: 6px 12px;
+		border-radius: 7px;
+		background: var(--color-accent);
+		color: #fff;
+		font-size: 12px;
+		font-weight: 600;
+	}
+	.preview-back:hover { background: var(--color-accent-light); }
 	.view-toggle-bar {
 		display: flex;
 		align-items: center;

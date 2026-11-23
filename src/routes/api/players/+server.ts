@@ -51,7 +51,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		query = query.eq('players.element_type', parseInt(position));
 	}
 
-	const limit = search ? 50 : 700;  // Load all when no search filter
+	const limit = search ? 50 : 1000;  // Load all when no search filter
 	const { data: players } = await query.order('total_points', { ascending: false }).limit(limit);
 
 	if (!players) return json([]);

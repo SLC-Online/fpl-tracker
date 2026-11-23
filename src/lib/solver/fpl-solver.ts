@@ -183,6 +183,39 @@ export function squadTwxp(squad: SolverPlayer[], weights: number[]): number {
 	return total;
 }
 
+export interface XiDetail {
+	formation: [number, number, number];
+	starters: number[];   // player ids: GK, DEFs, MIDs, FWDs, best first
+	captain: number;
+	bench: number[];      // backup GK first, then outfield best first
+	points: number;       // includes the captain's extra points
+}
+
+/** The line-up behind bestXiPoints for one week: same formations, order and tie-breaks. */
+export function bestXiDetail(squad: SolverPlayer[], wk: number, captainMultiplier = 2): XiDetail | null {
+	const byPos: { id: number; v: number }[][] = [[], [], [], [], []];
+	for (const p of squad) byPos[p.pos].push({ id: p.id, v: p.proj[wk] ?? 0 });
+	for (let pos = 1; pos <= 4; pos++) byPos[pos].sort((a, b) => b.v - a.v);
+	if (byPos[1].length === 0) return null;
+	let best: XiDetail | null = null;
+	for (const [d, m, f] of FORMATIONS) {
+		if (byPos[2].length < d || byPos[3].length < m || byPos[4].length < f) continue;
+		const starters = [byPos[1][0], ...byPos[2].slice(0, d), ...byPos[3].slice(0, m), ...byPos[4].slice(0, f)];
+		let total = 0;
+		for (const s of starters) total += s.v;
+		let cap = starters[0];
+		for (const s of starters) if (s.v > cap.v) cap = s;
+		total += cap.v * (captainMultiplier - 1);
+		if (best === null || total > best.points) {
+			const ids = new Set(starters.map((s) => s.id));
+			const benchGk = byPos[1].filter((s) => !ids.has(s.id));
+			const benchOut = [...byPos[2], ...byPos[3], ...byPos[4]].filter((s) => !ids.has(s.id)).sort((a, b) => b.v - a.v);
+			best = { formation: [d, m, f], starters: starters.map((s) => s.id), captain: cap.id, bench: [...benchGk, ...benchOut].map((s) => s.id), points: total };
+		}
+	}
+	return best;
+}
+
 // ─── Model ──────────────────────────────────────────────────────────────────
 
 type HighsLike = { solve(problem: string, options?: Record<string, unknown>): any };

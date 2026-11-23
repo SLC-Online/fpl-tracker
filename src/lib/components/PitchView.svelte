@@ -7,9 +7,13 @@
 		bench: SquadPlayer[];
 		onPlayerClick?: (player: SquadPlayer) => void;
 		selectedId?: number | null;
+		/** Captain for the week shown (solver previews) */
+		captainId?: number | null;
+		/** Players coming in under a previewed plan */
+		newIds?: number[];
 	}
 
-	let { starting, bench, onPlayerClick, selectedId = null }: Props = $props();
+	let { starting, bench, onPlayerClick, selectedId = null, captainId = null, newIds = [] }: Props = $props();
 
 	function formatPrice(cost: number): string {
 		return `£${(cost / 10).toFixed(1)}`;
@@ -189,7 +193,9 @@
 						onclick={() => onPlayerClick?.(player)}
 						class="player-card"
 						class:player-card--selected={selectedId === player.element_id}
+						class:player-card--new={newIds.includes(player.element_id)}
 					>
+						{#if captainId === player.element_id}<span class="cap-badge" title="Captain">C</span>{/if}
 						<img
 							src={shirtUrl(player.team_code, true)}
 							alt={player.web_name}
@@ -210,7 +216,9 @@
 						onclick={() => onPlayerClick?.(player)}
 						class="player-card"
 						class:player-card--selected={selectedId === player.element_id}
+						class:player-card--new={newIds.includes(player.element_id)}
 					>
+						{#if captainId === player.element_id}<span class="cap-badge" title="Captain">C</span>{/if}
 						<img
 							src={shirtUrl(player.team_code, false)}
 							alt={player.web_name}
@@ -231,7 +239,9 @@
 						onclick={() => onPlayerClick?.(player)}
 						class="player-card"
 						class:player-card--selected={selectedId === player.element_id}
+						class:player-card--new={newIds.includes(player.element_id)}
 					>
+						{#if captainId === player.element_id}<span class="cap-badge" title="Captain">C</span>{/if}
 						<img
 							src={shirtUrl(player.team_code, false)}
 							alt={player.web_name}
@@ -252,7 +262,9 @@
 						onclick={() => onPlayerClick?.(player)}
 						class="player-card"
 						class:player-card--selected={selectedId === player.element_id}
+						class:player-card--new={newIds.includes(player.element_id)}
 					>
+						{#if captainId === player.element_id}<span class="cap-badge" title="Captain">C</span>{/if}
 						<img
 							src={shirtUrl(player.team_code, false)}
 							alt={player.web_name}
@@ -277,7 +289,9 @@
 					onclick={() => onPlayerClick?.(player)}
 					class="player-card player-card--bench"
 					class:player-card--selected={selectedId === player.element_id}
+						class:player-card--new={newIds.includes(player.element_id)}
 				>
+					{#if captainId === player.element_id}<span class="cap-badge" title="Captain">C</span>{/if}
 					<img
 						src={shirtUrl(player.team_code, player.element_type === 1)}
 						alt={player.web_name}
@@ -363,6 +377,7 @@
 	   PLAYER CARD
 	   ═══════════════════════════════════════════════ */
 	.player-card {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -377,6 +392,24 @@
 			border-color 0.15s ease;
 	}
 
+	.cap-badge {
+		position: absolute;
+		top: 2px;
+		right: 6px;
+		z-index: 2;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		background: #0f172a;
+		color: #fff;
+		border: 1.5px solid #fff;
+		font: 700 10px/15px var(--font-sans);
+		text-align: center;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+	}
+	.player-card--new .player-name-pill {
+		background: var(--color-rise);
+	}
 	.player-card:hover {
 		transform: translateY(-2px);
 	}
