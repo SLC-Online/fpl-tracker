@@ -25,6 +25,7 @@
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^2.49.0",
-		"apexcharts": "^4.7.0"
+		"apexcharts": "^4.7.0",
+		"highs": "^1.16.0"
 	}
 }
