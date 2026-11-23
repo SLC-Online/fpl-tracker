@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import loadHighs from 'highs';
-import { rulesFromBootstrap, checkRuleChanges, solve } from '../../src/lib/solver/fpl-solver.ts';
+import { rulesFromBootstrap, checkRuleChanges, solve, solveRanked } from '../../src/lib/solver/fpl-solver.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const benchDir = path.resolve(here, '../../../fpl_project/bench');
@@ -65,10 +65,37 @@ const r2 = run('At most 2', { atMost: 2 });
 const bestAny = ref.ranked.sort((a, b) => b.net - a.net)[0];
 check(Math.abs(r2.net - bestAny.net) < 1e-9, `best of 0–2 transfers net ${r2.net} vs ${bestAny.net}`);
 
+// Solver alternatives (re-solve excluding squads found): the brute force's top 5, in order.
+const squadKey = (ids) => [...ids].sort((a, b) => a - b).join(',');
+const refSquad = (moves) => {
+	const outs = new Set(moves.map(([o]) => o));
+	return squadKey([...fx.squad_ids.filter((id) => !outs.has(id)), ...moves.map(([, i]) => i)]);
+};
+for (const depth of [1, 2]) {
+	const want = ref.ranked.filter((m) => m.depth === depth).slice(0, 5);
+	const t = performance.now();
+	const got = solveRanked(highs, { ...base, transfers: { exactly: depth } }, want.length);
+	const secs = (performance.now() - t) / 1000;
+	console.log(`\nTop ${want.length} at exactly ${depth}: ${secs.toFixed(2)}s (${(secs / got.length).toFixed(2)}s each)`);
+	for (let k = 0; k < Math.min(5, got.length); k++) console.log(`  ${k + 1}. ${show(got[k])}  net ${got[k].net.toFixed(2)}`);
+	check(got.length === want.length, `${got.length} results`);
+	check(got.every((r, k) => Math.abs(r.net - want[k].net) < 1e-9), 'every net matches the brute force, in order');
+	check(got.every((r, k) => squadKey(r.squadIds) === refSquad(want[k].moves) || Math.abs(r.net - want[k].net) < 1e-12), 'every plan matches the brute force (ties aside)');
+	check(got.every((r) => r.status === 'Optimal'), 'all proven optimal');
+}
+
 if (process.argv.includes('--deep')) {
 	for (const depth of [3, 4, 5]) run(`Exactly ${depth}`, { exactly: depth }, { timeLimitSeconds: 300 });
 	run('At most 5', { atMost: 5 }, { timeLimitSeconds: 300 });
 	run('Wildcard', 'wildcard', { timeLimitSeconds: 300 });
+	for (const [label, transfers] of [['exactly 3', { exactly: 3 }], ['exactly 4', { exactly: 4 }], ['at most 5', { atMost: 5 }], ['wildcard', 'wildcard']]) {
+		const t = performance.now();
+		const got = solveRanked(highs, { ...base, transfers, timeLimitSeconds: 300 }, 10);
+		const secs = (performance.now() - t) / 1000;
+		console.log(`\nTop 10, ${label}: ${secs.toFixed(1)}s (${(secs / got.length).toFixed(2)}s each)`);
+		got.forEach((r, k) => console.log(`  ${k + 1}. net ${r.net.toFixed(2)}  ${r.status}  ${show(r)}`));
+		check(got.every((r, k) => k === 0 || r.net <= got[k - 1].net + 1e-9), 'nets never increase down the list');
+	}
 }
 
 console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');

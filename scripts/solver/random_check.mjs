@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import loadHighs from 'highs';
 import { solve, squadTwxp } from '../../src/lib/solver/fpl-solver.ts';
+import { rankedSearch } from '../../src/lib/solver/ranked-search.ts';
 
 const [cases = 40, perPos = 12, seed0 = 1] = process.argv.slice(2).map(Number);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,7 @@ function bruteBest(squad, market, bank, ft, weights, depth) {
 	for (const p of market) cands[p.pos].push(p);
 	const hit = Math.max(0, depth - ft) * 4;
 	let best = null;
+	const seen = new Map();
 	for (const outs of combinations(squad, depth)) {
 		const budget = bank + outs.reduce((s, p) => s + p.sell, 0);
 		const kept = squad.filter((p) => !outs.includes(p));
@@ -73,8 +75,11 @@ function bruteBest(squad, market, bank, ft, weights, depth) {
 			if (!ok) continue;
 			const net = squadTwxp(kept.concat(ins), weights) - base - hit;
 			if (best === null || net > best) best = net;
+			const k = ins.map((p) => p.id).sort((a, b) => a - b).join(',') + '|' + Number(net.toFixed(2));
+			if (!seen.has(k) || net > seen.get(k)) seen.set(k, net);
 		}
 	}
+	bruteBest.lastRanked = [...seen.values()].sort((a, b) => b - a);
 	return best;
 }
 
@@ -93,9 +98,13 @@ for (let n = 0; n < cases; n++) {
 	const weights = fx.weights;
 	const req = { players: [...squad, ...market], squadIds: squad.map((p) => p.id), bank, freeTransfers: ft, weights, rules };
 	const bf = [0];
+	const ranked = rankedSearch({ ...req, maxTransfers: 3, topN: 8 });
 	for (const d of [1, 2, 3]) {
 		const want = bruteBest(squad, market, bank, ft, weights, d);
 		bf.push(want);
+		const wantList = bruteBest.lastRanked.slice(0, 8), gotList = ranked.byDepth[d].map((p) => p.net);
+		checks++;
+		if (wantList.length !== gotList.length || wantList.some((v, k) => Math.abs(v - gotList[k]) > 1e-9)) { fails++; console.log(`FAIL case ${n} ranked depth ${d}: brute ${wantList.map((v) => v.toFixed(3))} vs ranked ${gotList.map((v) => v.toFixed(3))}`); }
 		const r = solve(highs, { ...req, transfers: { exactly: d } });
 		checks++;
 		const ok = want === null ? r.status === 'Infeasible' : r.status === 'Optimal' && Math.abs(r.net - want) < 1e-9 && Math.abs(r.solverObjective - r.baseTwxp - r.net) < 1e-6;

@@ -132,6 +132,10 @@ export interface SolveRequest {
 	/** exactly N transfers (for comparisons), at most N, or a wildcard (unlimited, no hits) */
 	transfers: { exactly: number } | { atMost: number } | 'wildcard';
 	timeLimitSeconds?: number;
+	/** Squads (lists of player ids) the answer must differ from: used to rank alternatives. */
+	exclude?: number[][];
+	/** Extra HiGHS options (tuning). */
+	highsOptions?: Record<string, unknown>;
 }
 
 export interface SolveResult {
@@ -234,12 +238,41 @@ export function buildModel(req: SolveRequest): { lp: string; variables: number; 
 
 	// Transfers = number of new players bought
 	const bought = pool.filter((p) => !owned.has(p.id)).map(x);
-	if (!wildcard) {
-		if ('exactly' in req.transfers) row('ntransfers', `${sum(bought)} = ${req.transfers.exactly}`);
-		else row('ntransfers', `${sum(bought)} <= ${req.transfers.atMost}`);
+
+	// Affordability (tightens the model; rules out nothing legal). With k
+	// transfers, buying p needs the k sales to cover p plus k-1 other buys, so
+	// at least one sale must be worth >= (cost_p + (k-1)*cheapest - bank) / k.
+	// Without this the LP relaxation "buys a quarter" of stars nobody can
+	// afford, its bound sits points above the answer and alternatives crawl.
+	{
+		const tr = req.transfers;
+		const maxK = tr === 'wildcard' ? rules.squadSize : 'exactly' in tr ? tr.exactly : tr.atMost;
+		const minK = tr !== 'wildcard' && 'exactly' in tr ? tr.exactly : 1;
+		const cheapest = Math.min(...pool.filter((p) => !owned.has(p.id)).map((p) => p.cost));
+		const ownedPlayers = pool.filter((p) => owned.has(p.id));
+		for (const p of pool) {
+			if (owned.has(p.id) || maxK < 1) continue;
+			let need = Infinity;
+			for (let k = Math.max(1, minK); k <= maxK; k++) need = Math.min(need, (p.cost + (k - 1) * cheapest - req.bank) / k);
+			if (need <= 0) continue;
+			const sellers = ownedPlayers.filter((o) => (o.sell ?? o.cost) >= need);
+			if (sellers.length === ownedPlayers.length) continue;
+			// x_p <= sum over sellers (1 - x_o)  <=>  x_p + sum x_o <= |sellers|
+			row(`afford${p.id}`, `${[x(p), ...sellers.map(x)].join(' + ')} <= ${sellers.length}`);
+		}
+	}
+	const tr = req.transfers;
+	if (tr !== 'wildcard') {
+		if ('exactly' in tr) row('ntransfers', `${sum(bought)} = ${tr.exactly}`);
+		else row('ntransfers', `${sum(bought)} <= ${tr.atMost}`);
 		// hits >= transfers - free transfers (hits >= 0 from bounds)
 		row('hitcount', `${sum(bought)} - hits <= ${req.freeTransfers}`);
 	}
+
+	// Alternatives: rule out squads already found (at least one player must differ).
+	(req.exclude ?? []).forEach((sq, k) => {
+		row(`alt${k}`, `${sq.map((id) => `x${id}`).join(' + ')} <= ${sq.length - 1}`);
+	});
 
 	// Each week: 11 starters from the squad within formation limits, one captain who starts.
 	for (let t = 0; t < W; t++) {
@@ -273,7 +306,7 @@ export function buildModel(req: SolveRequest): { lp: string; variables: number; 
 		wildcard ? '' : 'Generals\n hits',
 		'End'
 	].filter(Boolean).join('\n');
-	return { lp, variables: binaries.length + (wildcard ? 0 : 1), constraints: nRows };
+	return { lp, variables: pool.length * (1 + 2 * W) + (wildcard ? 0 : 1), constraints: nRows };
 }
 
 export function solve(highs: HighsLike, req: SolveRequest): SolveResult {
@@ -284,7 +317,8 @@ export function solve(highs: HighsLike, req: SolveRequest): SolveResult {
 		output_flag: false,
 		mip_rel_gap: 0,      // don't stop "close enough": prove the actual best
 		mip_abs_gap: 1e-9,
-		...(req.timeLimitSeconds ? { time_limit: req.timeLimitSeconds } : {})
+		...(req.timeLimitSeconds ? { time_limit: req.timeLimitSeconds } : {}),
+		...req.highsOptions
 	});
 	const t2 = performance.now();
 
@@ -323,4 +357,32 @@ export function solve(highs: HighsLike, req: SolveRequest): SolveResult {
 		timings: { buildMs: t1 - t0, solveMs: t2 - t1 },
 		modelSize: { variables, constraints }
 	};
+}
+
+/**
+ * The best plan, then the next best, and so on: each solve rules out every
+ * squad already found, so the n results are the n best distinct squads in
+ * order (the same list the brute force ranks). Stops early if no more legal
+ * plans exist. onResult fires as each one arrives, so a UI can fill in.
+ */
+export function solveRanked(
+	highs: HighsLike,
+	req: SolveRequest,
+	n: number,
+	onResult?: (r: SolveResult, rank: number) => void
+): SolveResult[] {
+	const out: SolveResult[] = [];
+	const exclude = [...(req.exclude ?? [])];
+	for (let k = 0; k < n; k++) {
+		const r = solve(highs, { ...req, exclude });
+		if (r.status !== 'Optimal' || r.squadIds.length !== req.rules.squadSize) {
+			// Time limit etc: report what we have, unproven.
+			if (r.status !== 'Infeasible' && r.squadIds.length === req.rules.squadSize) { out.push(r); onResult?.(r, k); }
+			break;
+		}
+		out.push(r);
+		onResult?.(r, k);
+		exclude.push(r.squadIds);
+	}
+	return out;
 }
