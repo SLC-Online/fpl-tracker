@@ -3,6 +3,7 @@ import { getEntry, getEventPicks, getTransfers, getHistory, calculateSellingPric
 import { supabaseAdmin } from '$lib/supabase-server';
 import { getPriceHistory } from '$lib/server/price-history';
 import { replayPurchasePrices } from '$lib/purchase-prices';
+import { freeTransfersAfter } from '$lib/free-transfers';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -47,7 +48,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		// 4. Get all transfers this season + chip history (for accurate FT calc)
 		const transfers = await getTransfers(managerId);
 		let chips: any[] = [];
-		let historyCurrent: { event: number; bank: number }[] = [];
+		let historyCurrent: { event: number; bank: number; event_transfers: number }[] = [];
 		try {
 			const history = await getHistory(managerId);
 			chips = history.chips || [];
@@ -225,39 +226,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			};
 		});
 
-		// Compute available free transfers going INTO the next (planned) gameweek.
-		// There is no transfer at GW1 (you just pick your initial squad), so free
-		// transfers only start to exist from GW2. You get 1 free transfer at GW2,
-		// then each subsequent gameweek you bank +1 (capped at 5), minus transfers
-		// made that GW. Wildcard/Free-Hit gameweeks don't consume banked FTs.
+		// Free transfers going into the next gameweek, replayed from the season
+		// (see $lib/free-transfers for the rules and how they were checked).
 		let freeTransfers = 1;
 		try {
-			const transfersByGw = new Map<number, number>();
-			for (const t of transfers) {
-				transfersByGw.set(t.event, (transfersByGw.get(t.event) || 0) + 1);
-			}
-			const chipByGw = new Map<number, string>();
-			for (const c of chips) {
-				if (c.name === 'wildcard' || c.name === 'freehit') {
-					chipByGw.set(c.event, c.name);
-				}
-			}
-
-			if (nextGw <= 2) {
-				freeTransfers = 1;  // GW2 is the first week a free transfer exists
-			} else {
-				let ft = 1;  // the GW2 allowance
-				// process completed gameweeks from GW2 up to the one before nextGw
-				for (let gw = 2; gw < nextGw; gw++) {
-					if (gw > 2) ft = Math.min(5, ft + 1);   // bank +1 at the start of each GW after GW2
-					if (chipByGw.has(gw)) continue;          // WC/FH: transfers free, bank untouched
-					const made = transfersByGw.get(gw) || 0;
-					ft = Math.max(0, ft - made);
-				}
-				// bank the +1 for the upcoming (nextGw)
-				ft = Math.min(5, ft + 1);
-				freeTransfers = ft;
-			}
+			freeTransfers = freeTransfersAfter(historyCurrent as any, chips, nextGw);
 		} catch {
 			freeTransfers = 1;
 		}
