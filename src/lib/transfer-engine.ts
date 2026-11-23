@@ -3,7 +3,7 @@
  * Input-source agnostic: works with whatever projections are in the system.
  */
 
-import { bestXiPoints } from './solver/fpl-solver';
+import { bestXiPoints } from './solver/fpl-solver.ts';
 
 export const DECAY = 0.85;
 export const BCV_THRESHOLD = 0.10;  // Minimum BCV gain to justify a transfer

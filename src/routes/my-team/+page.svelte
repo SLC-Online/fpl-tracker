@@ -6,11 +6,12 @@
 	import TeamPicker from '$lib/components/TeamPicker.svelte';
 	import { isSaved, toggleSaved, pushRecent } from '$lib/saved-teams';
 	import {
-		calculateSquadTWxP, calculatePlayerTWxP, applyTransfers,
-		transferPointsCost, isTransferWorthIt,
-		DECAY, type SquadPlayer, type TransferOption
+		calculatePlayerTWxP, applyTransfers,
+		DECAY, type SquadPlayer
 	} from '$lib/transfer-engine';
 	import PitchView from '$lib/components/PitchView.svelte';
+	import { evaluatePlan, solverPlayer, type PlanTransfer } from '$lib/plan';
+	import { bestXiDetail } from '$lib/solver/fpl-solver';
 	import SolverPanel, { type SolverPreview } from '$lib/components/SolverPanel.svelte';
 
 	// --- View mode ---
@@ -52,8 +53,19 @@
 	let declaredSectionOpen = $state(false);
 
 	// --- Transfer planner state ---
-	let savedOptions: TransferOption[] = $state([]);
-	let currentTransfers: { out: SquadPlayer; in: SquadPlayer }[] = $state([]);
+	interface PlanOption {
+		id: string;
+		name: string;
+		transfers: PlanTransfer[];
+		lineups: Record<number, number[]>;
+	}
+	let savedOptions: PlanOption[] = $state([]);
+	// Planned transfers, each tied to the gameweek it's made in.
+	let currentTransfers: PlanTransfer[] = $state([]);
+	// Hand-picked line-ups by gameweek (15 ids, first 11 start); other weeks use the best XI.
+	let lineups = $state<Record<number, number[]>>({});
+	// Which gameweek the pitch is showing (index into planGws).
+	let viewWeek = $state(0);
 	let transferMode = $state(false);
 	let transferOutPlayer: SquadPlayer | null = $state(null);
 	let searchQuery = $state('');
@@ -93,6 +105,8 @@
 			declaredTransfers = [];
 			savedOptions = [];
 			currentTransfers = [];
+			lineups = {};
+			viewWeek = 0;
 			freeTransfers = squadData.free_transfers ?? 1;
 			const m = squadData.manager;
 			pushRecent({ id: m.id, team: m.team_name, manager: m.name });
@@ -141,37 +155,9 @@
 		return bank;
 	});
 
-	let baseTWxP = $derived(calculateSquadTWxP(baseSquad));
-
-	// --- Working squad (base + planned transfers, respecting manual ordering for subs) ---
-	let workingSquadRaw = $derived.by(() => {
-		if (currentTransfers.length === 0) return baseSquad;
-		return applyTransfers(baseSquad, baseBank, currentTransfers).squad;
-	});
-
-	let workingSquad = $derived.by(() => {
-		if (manualSquadOrder.length === 0) return workingSquadRaw;
-		// Reorder based on manual order (from subs)
-		const byId = new Map(workingSquadRaw.map(p => [p.element_id, p]));
-		const ordered: SquadPlayer[] = [];
-		for (const id of manualSquadOrder) {
-			const p = byId.get(id);
-			if (p) ordered.push(p);
-		}
-		// Add any players not in the manual order (new transfers)
-		for (const p of workingSquadRaw) {
-			if (!manualSquadOrder.includes(p.element_id)) ordered.push(p);
-		}
-		return ordered;
-	});
-
-	let workingBank = $derived.by(() => {
-		if (currentTransfers.length === 0) return baseBank;
-		const { bank } = applyTransfers(baseSquad, baseBank, currentTransfers);
-		return bank;
-	});
-
-	let workingTWxP = $derived(calculateSquadTWxP(workingSquad));
+	let allPlayers: any[] = $state([]);
+	let allPlayersLoaded = $state(false);   // true only once data has actually arrived
+	let allPlayersFetching = $state(false); // re-entry guard while the fetch is in flight
 
 	// Free transfers remaining after any DECLARED (committed) transfers.
 	// Declared transfers use up free transfers first; trial transfers in the
@@ -182,7 +168,37 @@
 			: Math.max(0, freeTransfers - declaredTransfers.length)
 	);
 
-	let transferCost = $derived(transferPointsCost(currentTransfers.length, effectiveFreeTransfers));
+	// --- The plan, week by week (see $lib/plan) ---
+	let planGws = $derived.by(() => {
+		const gws = new Set<number>();
+		for (const p of allPlayers) for (const pr of p.projections || []) gws.add(pr.gw);
+		for (const p of baseSquad) for (const pr of p.projections || []) gws.add(pr.gw);
+		return [...gws].sort((a, b) => a - b).slice(0, 8);
+	});
+	let teamIdOf = $derived(new Map<number, number>(allPlayers.map((p: any) => [p.element_id, p.team_id])));
+	let planCtx = $derived({
+		base: baseSquad,
+		teamOf: (id: number) => teamIdOf.get(id),
+		bank: baseBank,
+		freeTransfers: effectiveFreeTransfers,
+		realFreeTransfers: Math.max(0, (squadData?.free_transfers ?? 1) - declaredTransfers.length),
+		gws: planGws,
+		decay: DECAY,
+	});
+	let planEval = $derived(evaluatePlan(planCtx, { transfers: currentTransfers, lineups }));
+	let baseEval = $derived(evaluatePlan(planCtx, { transfers: [], lineups: {} }));
+	let baseTWxP = $derived(baseEval.twxp);
+	let week = $derived(planEval.weeks[Math.min(viewWeek, Math.max(0, planEval.weeks.length - 1))]);
+	let viewGw = $derived(planGws[viewWeek]);
+
+	// The squad shown: this week's line-up (starters then bench).
+	let workingSquadRaw = $derived(week?.squad ?? baseSquad);
+	let workingSquad = $derived(workingSquadRaw);
+	// Bank after this week's transfers.
+	let workingBank = $derived(week?.bank ?? baseBank);
+	let workingTWxP = $derived(planEval.twxp);
+
+	let transferCost = $derived(planEval.hits);
 
 	// --- Squad display (starting XI / bench) ---
 	let starting11 = $derived(workingSquad.filter((_, i) => i < 11));
@@ -367,7 +383,7 @@
 					return;
 				}
 
-				manualSquadOrder = newSquad.map(p => p.element_id);
+				lineups = { ...lineups, [viewGw]: newSquad.map(p => p.element_id) };
 			}
 			deselectPlayer();
 		}
@@ -379,13 +395,8 @@
 		transferOutPlayer = null;
 	}
 
-	// Manual squad ordering (for subs) — stores the desired element_id order
-	let manualSquadOrder: number[] = $state([]);
 
 	// --- Transfer search (client-side for instant, accent-insensitive filtering) ---
-	let allPlayers: any[] = $state([]);
-	let allPlayersLoaded = $state(false);   // true only once data has actually arrived
-	let allPlayersFetching = $state(false); // re-entry guard while the fetch is in flight
 
 	async function loadAllPlayers() {
 		if (allPlayersFetching || allPlayersLoaded) return;
@@ -548,11 +559,14 @@
 			projections: inPlayer.projections || [],
 			bcv: inPlayer.bcv,
 		};
-		currentTransfers = [...currentTransfers, { out: transferOutPlayer, in: inSquadPlayer }];
-		// Update manual order: replace the outgoing player's id with incoming
-		if (manualSquadOrder.length > 0) {
-			manualSquadOrder = manualSquadOrder.map(id => id === transferOutPlayer!.element_id ? inPlayer.element_id : id);
+		const outId = transferOutPlayer.element_id;
+		currentTransfers = [...currentTransfers, { gw: viewGw, out: transferOutPlayer, in: inSquadPlayer }];
+		// Hand-picked line-ups from this week on: the new player takes the old one's place.
+		const next: Record<number, number[]> = {};
+		for (const [g, order] of Object.entries(lineups)) {
+			next[+g] = +g >= viewGw ? order.map((id) => (id === outId ? inPlayer.element_id : id)) : order;
 		}
+		lineups = next;
 		deselectPlayer();
 	}
 
@@ -562,54 +576,61 @@
 
 	function removeCurrentTransfer(idx: number) {
 		currentTransfers = currentTransfers.filter((_, i) => i !== idx);
+		// Line-ups that relied on the removed transfer no longer fit; drop them.
+		lineups = Object.fromEntries(Object.entries(lineups).filter(([g, order]) => {
+			const w = planEval.weeks.find((x) => x.gw === +g);
+			return !w || order.every((id) => w.squad.some((p) => p.element_id === id));
+		}));
 	}
 
 	function resetTransfers() {
 		currentTransfers = [];
+		lineups = {};
 		transferMode = false;
 		transferOutPlayer = null;
 	}
 
 	function saveAsOption() {
-		if (currentTransfers.length === 0) return;
-		const { squad, bank } = applyTransfers(baseSquad, baseBank, currentTransfers);
-		const twxp = calculateSquadTWxP(squad);
-		const cost = transferPointsCost(currentTransfers.length, effectiveFreeTransfers);
-		const newOption: TransferOption = {
+		if (currentTransfers.length === 0 && Object.keys(lineups).length === 0) return;
+		savedOptions = [...savedOptions, {
 			id: crypto.randomUUID(),
 			name: `Option ${String.fromCharCode(65 + savedOptions.length)}`,
 			transfers: [...currentTransfers],
-			resultSquad: squad,
-			bank,
-			twxp,
-			twxpDelta: twxp - baseTWxP,
-			cost,
-			netGain: (twxp - baseTWxP) - cost,
-		};
-		savedOptions = [...savedOptions, newOption];
+			lineups: { ...lineups },
+		}];
 		currentTransfers = [];
+		lineups = {};
 	}
 
 	function deleteOption(idx: number) {
 		savedOptions = savedOptions.filter((_, i) => i !== idx);
 	}
 
-	// --- Comparison ---
+	// --- Comparison: every option re-scored week by week with the same rules ---
 	let comparisonData = $derived.by(() => {
 		const all = [
-			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as any[], verdict: null as any, overBy: 0 },
-			...savedOptions.map(o => ({
-				name: o.name,
-				twxp: o.twxp,
-				cost: o.cost,
-				netGain: o.netGain,
-				transfers: o.transfers,
-				// An option FPL wouldn't accept can't be "worth it", whatever its points.
-				verdict: o.bank < 0
-					? { worth: false, reason: `Costs ${formatPrice(-o.bank)}m more than you have` }
-					: isTransferWorthIt(o, effectiveFreeTransfers),
-				overBy: o.bank < 0 ? -o.bank : 0,
-			}))
+			{ name: 'No transfer', twxp: baseTWxP, cost: 0, netGain: 0, transfers: [] as PlanTransfer[], lineupWeeks: [] as number[], verdict: null as any, overBy: 0 },
+			...savedOptions.map((o) => {
+				const r = evaluatePlan(planCtx, { transfers: o.transfers, lineups: o.lineups });
+				const net = r.twxp - baseTWxP - r.hits;
+				const over = Math.max(0, ...r.weeks.map((w) => -w.bank));
+				const illegal = r.problems.find((p) => !p.includes('line-up'));
+				return {
+					name: o.name,
+					twxp: r.twxp,
+					cost: r.hits,
+					netGain: net,
+					transfers: o.transfers,
+					lineupWeeks: Object.keys(o.lineups).map(Number).sort((a, b) => a - b),
+					// An option FPL wouldn't accept can't be "worth it", whatever its points.
+					verdict: illegal
+						? { worth: false, reason: illegal }
+						: net > 0
+							? { worth: true, reason: `${formatPts(net)} more than keeping your team${r.hits ? `, after −${r.hits} in hits` : ''}` }
+							: { worth: false, reason: `${formatPts(-net)} fewer than keeping your team${r.hits ? `, after −${r.hits} in hits` : ''}` },
+					overBy: over,
+				};
+			}),
 		];
 		const maxTwxp = Math.max(...all.map(a => a.twxp));
 		const minTwxp = Math.min(...all.map(a => a.twxp));
@@ -637,17 +658,72 @@
 			projections: p.projections || [], bcv: p.bcv,
 		};
 	}
-	let previewStarting = $derived((solverPreview?.starters ?? []).map(asSquadPlayer).filter(Boolean) as SquadPlayer[]);
-	let previewBench = $derived((solverPreview?.bench ?? []).map(asSquadPlayer).filter(Boolean) as SquadPlayer[]);
-	let previewGw = $derived.by(() => {
-		const s = new Set<number>();
-		for (const p of allPlayers) for (const pr of p.projections ?? []) s.add(pr.gw);
-		return [...s].sort((a, b) => a - b)[solverPreview?.week ?? 0];
+	// The previewed plan's line-up for the week the pitch is showing.
+	let previewDetail = $derived.by(() => {
+		if (!solverPreview) return null;
+		const squad = solverPreview.squadIds.map(asSquadPlayer).filter(Boolean) as SquadPlayer[];
+		return bestXiDetail(squad.map((p) => solverPlayer(p, planGws)), viewWeek);
 	});
+	let previewStarting = $derived((previewDetail?.starters ?? []).map(asSquadPlayer).filter(Boolean) as SquadPlayer[]);
+	let previewBench = $derived((previewDetail?.bench ?? []).map(asSquadPlayer).filter(Boolean) as SquadPlayer[]);
+	let previewGw = $derived(planGws[viewWeek]);
+
+	// --- Fixtures for the pitch ---
+	let fixtureData = $state<{ teams: Record<string, string>; fixtures: any[] } | null>(null);
+	let fixturesFor = '';
+	$effect(() => {
+		if (!planGws.length) return;
+		const key = `${planGws[0]}-${planGws[planGws.length - 1]}`;
+		if (key === fixturesFor) return;
+		fixturesFor = key;
+		fetch(`/api/fixtures?from=${planGws[0]}&to=${planGws[planGws.length - 1]}`)
+			.then((r) => (r.ok ? r.json() : null))
+			.then((d) => { if (d && !d.error) fixtureData = d; });
+	});
+	// "gw:team" -> opponents that week, e.g. ["ARS (H)"]; empty for a blank.
+	let fixtureLabels = $derived.by(() => {
+		const m = new Map<string, string[]>();
+		for (const f of fixtureData?.fixtures ?? []) {
+			const h = `${f.event}:${f.team_h}`, a = `${f.event}:${f.team_a}`;
+			m.set(h, [...(m.get(h) ?? []), `${fixtureData!.teams[f.team_a]} (H)`]);
+			m.set(a, [...(m.get(a) ?? []), `${fixtureData!.teams[f.team_h]} (A)`]);
+		}
+		return m;
+	});
+	let gwFirstKickoff = $derived.by(() => {
+		const m = new Map<number, string>();
+		for (const f of fixtureData?.fixtures ?? []) if (!m.has(f.event) || f.kickoff_time < m.get(f.event)!) m.set(f.event, f.kickoff_time);
+		return m;
+	});
+	function pitchSubline(p: SquadPlayer): string {
+		const team = teamIdOf.get(p.element_id);
+		const opp = team !== undefined ? fixtureLabels.get(`${viewGw}:${team}`) : undefined;
+		const pts = (p.projections || []).find((x) => x.gw === viewGw)?.pts;
+		const fx = !fixtureData ? '' : opp?.length ? opp.join(', ') : 'No match';
+		return [fx, pts != null ? formatPts(pts) : ''].filter(Boolean).join(' · ');
+	}
+	// A transfer's own gain: the incoming player's decayed points minus the
+	// outgoing one's, from the week it's made (weights as in the plan).
+	function transferGain(t: PlanTransfer): number {
+		let g = 0;
+		planGws.forEach((gw, i) => {
+			if (gw < t.gw) return;
+			const pin = (t.in.projections || []).find((x) => x.gw === gw)?.pts ?? 0;
+			const pout = (t.out.projections || []).find((x) => x.gw === gw)?.pts ?? 0;
+			g += (pin - pout) * Math.pow(DECAY, i);
+		});
+		return g;
+	}
+	function fmtKickoff(iso: string | undefined) {
+		if (!iso) return '';
+		return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+	}
+
 	function useSolverPlan(transfers: { out: number; in: number }[]) {
-		const pairs = transfers.map((t) => ({ out: asSquadPlayer(t.out)!, in: asSquadPlayer(t.in)! })).filter((t) => t.out && t.in);
+		const gw = planGws[0];
+		const pairs = transfers.map((t) => ({ gw, out: asSquadPlayer(t.out)!, in: asSquadPlayer(t.in)! })).filter((t) => t.out && t.in);
 		currentTransfers = pairs;
-		manualSquadOrder = [];
+		lineups = {};
 		clearPreview();
 	}
 
@@ -745,7 +821,7 @@
 					</div>
 					<div class="stat-cell" title={workingBank < 0 ? 'These transfers cost more than you have' : ''}>
 						<span class="stat-value font-mono" class:is-bad={workingBank < 0}>{workingBank < 0 ? `−${formatPrice(-workingBank)}` : formatPrice(workingBank)}</span>
-						<span class="stat-label" class:is-bad={workingBank < 0}>{workingBank < 0 ? 'Over budget' : 'Bank'}</span>
+						<span class="stat-label" class:is-bad={workingBank < 0}>{workingBank < 0 ? `Over budget GW${viewGw}` : viewWeek > 0 ? `Bank GW${viewGw}` : 'Bank'}</span>
 					</div>
 					<div class="stat-cell">
 						<span class="stat-value font-mono">{formatPrice(squadData.squad_value)}</span>
@@ -890,17 +966,17 @@
 		<!-- ═══════════════════════════════════════════════════════════════
 		     PLANNED TRANSFERS STRIP
 		     ═══════════════════════════════════════════════════════════════ -->
-		{#if currentTransfers.length > 0}
+		{#if currentTransfers.length > 0 || Object.keys(lineups).length > 0}
 			<section class="transfers-strip">
 				<div class="transfers-strip-header">
 					<div class="flex items-center gap-3 min-w-0">
 						<h2 class="font-display font-semibold text-sm">Planned Transfers</h2>
-						{#if workingBank < 0}
+						{#each planEval.weeks.filter((w) => w.bank < 0) as w}
 							<span class="over-budget-badge" role="status">
 								<svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 5.5v3.5M8 11.2v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M7.13 2.5a1 1 0 0 1 1.74 0l5.4 9.5a1 1 0 0 1-.87 1.5H2.6a1 1 0 0 1-.87-1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
-								Over budget by {formatPrice(-workingBank)}m — FPL won't allow this
+								GW{w.gw}: over budget by {formatPrice(-w.bank)}m — FPL won't allow this
 							</span>
-						{/if}
+						{/each}
 					</div>
 					<div class="flex gap-2">
 						<button onclick={saveAsOption} class="strip-btn strip-btn--accent">
@@ -911,22 +987,39 @@
 						</button>
 					</div>
 				</div>
-				<div class="transfers-strip-list">
-					{#each currentTransfers as t, i}
-						<div class="transfer-pill transfer-pill--lg">
-							<img src={teamBadgeUrl(t.out.team_code)} alt="" class="w-5 h-5" />
-							<span class="text-[var(--color-fall)] text-xs font-semibold">{t.out.web_name}</span>
-							<span class="font-mono text-[10px] text-[var(--color-text-3)]">{formatPrice(t.out.selling_price)}</span>
-							<svg class="w-3.5 h-3.5 text-[var(--color-text-3)]" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M10 5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-							<img src={teamBadgeUrl(t.in.team_code)} alt="" class="w-5 h-5" />
-							<span class="text-[var(--color-rise)] text-xs font-semibold">{t.in.web_name}</span>
-							<span class="font-mono text-[10px] text-[var(--color-text-3)]">{formatPrice(t.in.current_price)}</span>
-							<span class="font-mono text-[10px] ml-auto {calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections) > 0 ? 'text-[var(--color-rise)]' : 'text-[var(--color-fall)]'}">
-								{(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections)) > 0 ? '+' : ''}{formatPts(calculatePlayerTWxP(t.in.projections) - calculatePlayerTWxP(t.out.projections))}
-							</span>
-							<button onclick={() => removeCurrentTransfer(i)} class="ml-2 text-[var(--color-text-3)] hover:text-[var(--color-fall)]">
-								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+				<div class="plan-weeks">
+					{#each planEval.weeks.filter((w) => w.transfersMade || w.manualLineup) as w}
+						<div class="plan-week">
+							<button class="plan-week-head" onclick={() => (viewWeek = planGws.indexOf(w.gw))} title="Show this week on the pitch">
+								<span class="gw-tag">GW{w.gw}</span>
+								<span class="plan-week-meta">
+									{#if w.transfersMade}
+										{w.transfersMade} transfer{w.transfersMade > 1 ? 's' : ''} ·
+										{w.freeTransfers === Infinity ? 'unlimited' : `${w.freeTransfers} free`}{w.hits ? ` · −${w.hits} hit` : ' · no hit'}
+									{/if}
+									{#if w.manualLineup}{w.transfersMade ? ' · ' : ''}line-up picked by hand{/if}
+								</span>
 							</button>
+							<div class="transfers-strip-list">
+								{#each currentTransfers.map((t, i) => ({ t, i })).filter((x) => x.t.gw === w.gw) as { t, i }}
+									{@const gain = transferGain(t)}
+									<div class="transfer-pill transfer-pill--lg">
+										<img src={teamBadgeUrl(t.out.team_code)} alt="" class="w-5 h-5" />
+										<span class="text-[var(--color-fall)] text-xs font-semibold">{t.out.web_name}</span>
+										<span class="font-mono text-[10px] text-[var(--color-text-3)]">{formatPrice(t.out.selling_price)}</span>
+										<svg class="w-3.5 h-3.5 text-[var(--color-text-3)]" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M10 5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+										<img src={teamBadgeUrl(t.in.team_code)} alt="" class="w-5 h-5" />
+										<span class="text-[var(--color-rise)] text-xs font-semibold">{t.in.web_name}</span>
+										<span class="font-mono text-[10px] text-[var(--color-text-3)]">{formatPrice(t.in.current_price)}</span>
+										<span class="font-mono text-[10px] ml-auto {gain > 0 ? 'text-[var(--color-rise)]' : 'text-[var(--color-fall)]'}" title="Their own time-weighted points from GW{t.gw} on, before line-ups">
+											{gain > 0 ? '+' : ''}{formatPts(gain)}
+										</span>
+										<button onclick={() => removeCurrentTransfer(i)} class="ml-2 text-[var(--color-text-3)] hover:text-[var(--color-fall)]" aria-label="Remove transfer">
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+										</button>
+									</div>
+								{/each}
+							</div>
 						</div>
 					{/each}
 				</div>
@@ -957,6 +1050,50 @@
 					{/if}
 				</div>
 
+				{#if planGws.length}
+					{@const wk = week}
+					<div class="gw-nav">
+						<div class="gw-nav-row">
+							<button class="gw-nav-btn" disabled={viewWeek === 0} onclick={() => (viewWeek = viewWeek - 1)} aria-label="Previous gameweek">
+								<svg viewBox="0 0 16 16" width="15" height="15" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+							</button>
+							<div class="gw-nav-mid">
+								<div class="gw-nav-title">Gameweek {viewGw}<span class="gw-nav-date">{fmtKickoff(gwFirstKickoff.get(viewGw))}</span></div>
+								{#if solverPreview && previewDetail}
+									<div class="gw-nav-meta">Solver preview · {formatPts(previewDetail.points)} pts</div>
+								{:else if wk}
+									<div class="gw-nav-meta">
+										{wk.freeTransfers === Infinity ? 'Unlimited transfers' : `${wk.freeTransfers} free transfer${wk.freeTransfers === 1 ? '' : 's'}`}
+										· {wk.transfersMade} made{wk.hits ? ` (−${wk.hits})` : ''}
+										· {formatPts(wk.points)} pts
+									</div>
+								{/if}
+							</div>
+							<button class="gw-nav-btn" disabled={viewWeek >= planGws.length - 1} onclick={() => (viewWeek = viewWeek + 1)} aria-label="Next gameweek">
+								<svg viewBox="0 0 16 16" width="15" height="15" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+							</button>
+						</div>
+						<div class="gw-chips">
+							{#each planGws as g, i}
+								{@const w = planEval.weeks[i]}
+								<button class="gw-chip" class:on={i === viewWeek} onclick={() => (viewWeek = i)} title={w?.transfersMade ? `${w.transfersMade} transfer${w.transfersMade > 1 ? 's' : ''}` : ''}>
+									{g}
+									{#if w && (w.transfersMade || w.manualLineup)}<span class="gw-chip-dot" class:lineup={!w.transfersMade}></span>{/if}
+								</button>
+							{/each}
+						</div>
+						{#if !solverPreview && wk?.manualLineup}
+							<div class="gw-nav-note">
+								You've picked this week's line-up by hand.
+								<button onclick={() => { const n = { ...lineups }; delete n[viewGw]; lineups = n; }}>Use the best XI</button>
+							</div>
+						{/if}
+						{#if !solverPreview && wk?.problems.length}
+							<div class="gw-nav-warn">{wk.problems.join(' · ')}</div>
+						{/if}
+					</div>
+				{/if}
+
 				{#if solverPreview}
 					<div class="preview-banner" role="status">
 						<div class="min-w-0">
@@ -975,7 +1112,8 @@
 						bench={solverPreview ? previewBench : bench}
 						onPlayerClick={solverPreview ? undefined : onPitchPlayerClick}
 						selectedId={solverPreview ? null : selectedPlayer?.element_id}
-						captainId={solverPreview?.captain ?? null}
+						captainId={solverPreview ? (previewDetail?.captain ?? null) : (week?.captain ?? null)}
+						subline={pitchSubline}
 						newIds={solverPreview ? solverPreview.transfers.map((t) => t.in) : []}
 					/>
 				{:else}
@@ -1284,6 +1422,7 @@
 							{allPlayers}
 							{allPlayersLoaded}
 							{previewKey}
+							bind:week={viewWeek}
 							onPreview={onSolverPreview}
 							onUsePlan={useSolverPlan}
 							onShowPitch={() => document.querySelector('.main-left')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -1313,13 +1452,19 @@
 								{/if}
 							</div>
 
-							{#if item.transfers.length > 0}
+							{#if item.transfers.length > 0 || item.lineupWeeks.length > 0}
 								<div class="space-y-1 mb-3">
 									{#each item.transfers as t}
 										<div class="flex items-center gap-1.5 text-[10px]">
+											<span class="gw-tag">GW{t.gw}</span>
 											<span class="text-[var(--color-fall)]">{t.out.web_name}</span>
 											<span class="text-[var(--color-text-3)]">→</span>
 											<span class="text-[var(--color-rise)]">{t.in.web_name}</span>
+										</div>
+									{/each}
+									{#each item.lineupWeeks as g}
+										<div class="flex items-center gap-1.5 text-[10px] text-[var(--color-text-2)]">
+											<span class="gw-tag">GW{g}</span> line-up picked by hand
 										</div>
 									{/each}
 								</div>
@@ -1757,6 +1902,65 @@
 	   VIEW TOGGLE
 	   ═══════════════════════════════════════════════════════════ */
 	.hidden { display: none !important; }
+	.gw-nav {
+		max-width: 520px;
+		margin: 0 auto 10px;
+		padding: 8px 10px 10px;
+		border-radius: 10px;
+		background: var(--color-surface-2);
+		border: 1px solid var(--color-surface-4);
+	}
+	.gw-nav-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+	.gw-nav-btn {
+		width: 32px; height: 32px; flex-shrink: 0;
+		display: grid; place-items: center;
+		border-radius: 8px;
+		border: 1px solid var(--color-surface-4);
+		color: var(--color-text-1);
+	}
+	.gw-nav-btn:hover:not(:disabled) { background: var(--color-surface-3); color: var(--color-text-0); }
+	.gw-nav-btn:disabled { opacity: 0.3; }
+	.gw-nav-mid { text-align: center; min-width: 0; }
+	.gw-nav-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--color-text-0); }
+	.gw-nav-date { font-family: var(--font-sans); font-weight: 400; font-size: 11px; color: var(--color-text-2); margin-left: 8px; }
+	.gw-nav-meta { font-size: 11px; color: var(--color-text-2); margin-top: 1px; }
+	.gw-chips { display: flex; justify-content: center; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+	.gw-chip {
+		position: relative;
+		min-width: 30px;
+		padding: 3px 6px;
+		border-radius: 6px;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		color: var(--color-text-2);
+		background: var(--color-surface-0);
+		border: 1px solid var(--color-surface-4);
+	}
+	.gw-chip:hover { color: var(--color-text-0); }
+	.gw-chip.on { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+	.gw-chip-dot {
+		position: absolute; top: -3px; right: -3px;
+		width: 7px; height: 7px; border-radius: 50%;
+		background: var(--color-rise);
+		border: 1.5px solid var(--color-surface-2);
+	}
+	.gw-chip-dot.lineup { background: var(--color-accent-light); }
+	.gw-nav-note { margin-top: 8px; font-size: 11px; color: var(--color-text-2); text-align: center; }
+	.gw-nav-note button { color: var(--color-accent-light); font-weight: 600; margin-left: 4px; }
+	.gw-nav-warn { margin-top: 8px; font-size: 11px; color: var(--color-warning); text-align: center; }
+	.gw-tag {
+		display: inline-block;
+		font-family: var(--font-mono);
+		font-size: 10px;
+		font-weight: 600;
+		padding: 1px 6px;
+		border-radius: 5px;
+		background: var(--color-surface-3);
+		color: var(--color-accent-light);
+	}
+	.plan-weeks { display: flex; flex-direction: column; gap: 10px; }
+	.plan-week-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+	.plan-week-meta { font-size: 11px; color: var(--color-text-2); }
 	.solver-pane { display: flex; flex-direction: column; }
 	.preview-banner {
 		display: flex;

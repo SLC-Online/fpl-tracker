@@ -11,9 +11,11 @@
 		captainId?: number | null;
 		/** Players coming in under a previewed plan */
 		newIds?: number[];
+		/** Line under each name (e.g. this week's fixture and points); defaults to price */
+		subline?: (p: SquadPlayer) => string;
 	}
 
-	let { starting, bench, onPlayerClick, selectedId = null, captainId = null, newIds = [] }: Props = $props();
+	let { starting, bench, onPlayerClick, selectedId = null, captainId = null, newIds = [], subline }: Props = $props();
 
 	function formatPrice(cost: number): string {
 		return `£${(cost / 10).toFixed(1)}`;
@@ -204,7 +206,7 @@
 						<div class="player-name-pill">
 							<span class="player-name-text">{player.web_name}</span>
 						</div>
-						<span class="player-price">{formatPrice(player.current_price)}</span>
+						<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
 					</button>
 				{/each}
 			</div>
@@ -227,7 +229,7 @@
 						<div class="player-name-pill">
 							<span class="player-name-text">{player.web_name}</span>
 						</div>
-						<span class="player-price">{formatPrice(player.current_price)}</span>
+						<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
 					</button>
 				{/each}
 			</div>
@@ -250,7 +252,7 @@
 						<div class="player-name-pill">
 							<span class="player-name-text">{player.web_name}</span>
 						</div>
-						<span class="player-price">{formatPrice(player.current_price)}</span>
+						<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
 					</button>
 				{/each}
 			</div>
@@ -273,7 +275,7 @@
 						<div class="player-name-pill">
 							<span class="player-name-text">{player.web_name}</span>
 						</div>
-						<span class="player-price">{formatPrice(player.current_price)}</span>
+						<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
 					</button>
 				{/each}
 			</div>
@@ -300,7 +302,7 @@
 					<div class="player-name-pill">
 						<span class="player-name-text">{player.web_name}</span>
 					</div>
-					<span class="player-price">{formatPrice(player.current_price)}</span>
+					<span class="player-price">{subline ? subline(player) : formatPrice(player.current_price)}</span>
 				</button>
 			{/each}
 		</div>

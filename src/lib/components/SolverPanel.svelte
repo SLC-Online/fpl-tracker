@@ -32,9 +32,11 @@
 		onUsePlan: (transfers: { out: number; in: number }[]) => void;
 		/** Small screens: the pitch is above the panel, so offer a jump to it. */
 		onShowPitch?: () => void;
+		/** Gameweek index shown, shared with the pitch */
+		week?: number;
 	}
 
-	let { squad, sellingOptions, bank, freeTransfers, allPlayers, allPlayersLoaded, previewKey, onPreview, onUsePlan, onShowPitch }: Props = $props();
+	let { squad, sellingOptions, bank, freeTransfers, allPlayers, allPlayersLoaded, previewKey, onPreview, onUsePlan, onShowPitch, week = $bindable(0) }: Props = $props();
 
 	// ─── Settings ──────────────────────────────────────────────────────────
 	let maxTransfers = $state(2);
@@ -207,7 +209,7 @@
 
 	// ─── Display ───────────────────────────────────────────────────────────
 	let expanded = $state<string | null>(null);
-	let weekIdx = $state(0);
+	let weekIdx = $derived(Math.min(week, Math.max(0, horizon.length - 1)));
 
 	const planKey = (p: { squadIds: number[] }, tag: string) => tag + ':' + [...p.squadIds].sort((a, b) => a - b).join(',');
 	const name = (id: number) => byId.get(id)?.web_name ?? `#${id}`;
@@ -231,13 +233,12 @@
 	function toggleRow(key: string, ids: number[], transfers: { out: number; in: number }[], label: string) {
 		if (expanded === key) { expanded = null; return; }
 		expanded = key;
-		weekIdx = 0;
-		preview(key, ids, transfers, label, 0);
+		preview(key, ids, transfers, label, weekIdx);
 	}
 
 	function setWeek(i: number, key: string, ids: number[], transfers: { out: number; in: number }[], label: string) {
-		weekIdx = Math.max(0, Math.min(horizon.length - 1, i));
-		if (previewKey === key) preview(key, ids, transfers, label, weekIdx);
+		week = Math.max(0, Math.min(horizon.length - 1, i));
+		if (previewKey === key) preview(key, ids, transfers, label, week);
 	}
 
 	let nothingFound = $derived(!running && totalMs !== null && sections.every((s) => s.plans.length === 0) && !wildcardPlans?.length);
