@@ -72,17 +72,21 @@
 	});
 	const MAX_SCHEDULES = 40;
 
-	// Cores: leave one for the page; fewer on low-memory devices.
+	// How many plans at once: one per core (leaving one for the page), but
+	// within memory. An 8-week plan needs about 490 MB while it solves
+	// (measured), roughly in proportion to the weeks; all workers share the
+	// tab's memory, so allow ~1.6 GB on 8 GB+ devices, less on smaller ones.
 	const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 2 : 2;
 	const memory = typeof navigator !== 'undefined' ? (navigator as any).deviceMemory ?? 8 : 8;
-	let poolSize = $derived(Math.max(1, Math.min(cores - 1, memory <= 4 ? 2 : 6, schedules.length)));
+	const budgetMb = memory >= 8 ? 1100 : memory >= 4 ? 600 : 500;
+	let poolSize = $derived(Math.max(1, Math.min(cores - 1, schedules.length, Math.floor(budgetMb / (530 * gws.length / 8)))));
 
-	// Measured on an M-series Mac with live data: an 8-week plan without
-	// chips takes about 150 s on one core (roughly weeks^3.6); one with a chip
-	// about 1.6 times that (4 weeks: 11 s without, 25-49 s with). Scaled by
-	// this device's measured speed, capped by the time allowed per plan.
+	// Measured in Chrome on an M-series Mac with live data: an 8-week plan
+	// takes about 3 minutes to prove, a little longer with a chip (roughly
+	// weeks^3.6: 4 weeks takes 10-50 s). Scaled by this device's measured
+	// speed, capped by the time allowed per plan.
 	const perPlan = (s: Record<number, ChipName>) =>
-		Math.min(minutes * 60, 150 * Math.pow(gws.length / 8, 3.6) * (Object.keys(s).length ? 1.6 : 1) * speedFactor);
+		Math.min(minutes * 60, 170 * Math.pow(gws.length / 8, 3.6) * (Object.keys(s).length ? 1.2 : 1) * speedFactor);
 	let estimateSeconds = $derived.by(() => {
 		// Longest plans first across the pool: a simple upper estimate.
 		const times = schedules.map(perPlan).sort((a, b) => b - a);
